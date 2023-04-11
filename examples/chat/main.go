@@ -84,7 +84,7 @@ func (srv *ChatServer) ServerSentEvent(ctx context.Context, c *app.RequestContex
 				Data:  string(payload),
 			}
 			c.SetStatusCode(http.StatusOK)
-			err = event.Render(w)
+			err = sse.Render(w, event)
 			if err != nil {
 				return
 			}

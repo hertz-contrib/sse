@@ -55,7 +55,7 @@ func TestStreamRender(t *testing.T) {
 			Stream(ctx, c, func(ctx context.Context, w network.ExtWriter) {
 				for _, e := range expected {
 					time.Sleep(time.Millisecond * 100)
-					_ = e.Render(w)
+					_ = Render(w, &e)
 				}
 				return
 			})
@@ -93,7 +93,7 @@ func TestStreamRenderForever(t *testing.T) {
 			Stream(ctx, c, func(ctx context.Context, w network.ExtWriter) {
 				for t := range time.NewTicker(100 * time.Millisecond).C {
 					event := &Event{Data: t.Format(time.RFC3339)}
-					_ = event.Render(w)
+					_ = Render(w, event)
 				}
 			})
 		})
@@ -147,7 +147,7 @@ func BenchmarkResponseWriter(b *testing.B) {
 			Event: "new_message",
 			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
 		}
-		_ = event.Render(resp.GetHijackWriter())
+		_ = Render(resp.GetHijackWriter(), event)
 	}
 }
 

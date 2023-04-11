@@ -32,7 +32,7 @@ func main() {
 					Event: "timestamp",
 					Data:  t.Format(time.RFC3339),
 				}
-				err := event.Render(w)
+				err := sse.Render(w, event)
 				if err != nil {
 					return
 				}

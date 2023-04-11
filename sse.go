@@ -71,7 +71,7 @@ func Stream(ctx context.Context, c *app.RequestContext, f HandlerFunc) {
 }
 
 // Render encodes Event to bytes and send it to peer with immediate Flush.
-func (e *Event) Render(w network.ExtWriter) error {
+func Render(w network.ExtWriter, e *Event) error {
 	err := Encode(w, e)
 	if err != nil {
 		return fmt.Errorf("encode error: %w", err)
