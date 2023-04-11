@@ -12,6 +12,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/cloudwego/hertz/pkg/common/json"
 	"github.com/cloudwego/hertz/pkg/common/utils"
+	"github.com/hertz-contrib/sse"
 )
 
 // ChatServer implements a chat server to demonstrate use of server sent event in hertz.

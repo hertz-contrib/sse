@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package hertz_contrib_sse
+package sse
 
 import (
 	"context"

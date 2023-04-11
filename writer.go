@@ -1,4 +1,4 @@
-package hertz_contrib_sse
+package sse
 
 import (
 	"github.com/cloudwego/hertz/pkg/network"

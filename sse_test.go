@@ -18,7 +18,7 @@
 // Use of this source code is governed by a MIT style
 // license that can be found in the LICENSE file.
 
-package hertz_contrib_sse
+package sse
 
 import (
 	"bytes"
@@ -124,7 +124,7 @@ func TestLastEventID(t *testing.T) {
 
 type NoOpsExtWriter struct{}
 
-func (b NoOpsExtWriter) Write(p []byte) (n int, err error) {
+func (b NoOpsExtWriter) Write(_ []byte) (n int, err error) {
 	return 0, nil
 }
 

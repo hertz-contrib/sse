@@ -9,9 +9,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/hertz-contrib/sse"
+
 	"github.com/cloudwego/hertz/pkg/network"
 
-	"github.com/Haswf/sse"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 )

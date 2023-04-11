@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/hertz-contrib/sse"
+
 	"github.com/cloudwego/hertz/pkg/network"
 
 	"github.com/cloudwego/hertz/pkg/app"
