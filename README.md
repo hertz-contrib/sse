@@ -78,19 +78,6 @@ Also see:
 - [Server Sent Events are still not production ready after a decade. A lesson for me, a warning for you!](https://dev.to/miketalbot/server-sent-events-are-still-not-production-ready-after-a-decade-a-lesson-for-me-a-warning-for-you-2gie)
 - [For Server-Sent Events (SSE) what Nginx proxy configuration is appropriate?](https://serverfault.com/questions/801628/for-server-sent-events-sse-what-nginx-proxy-configuration-is-appropriate)
 
-## Chunked encoding
-
-It's possible to send server-sent events with chunked encoding, although it is actually not [recommended](https://html.spec.whatwg.org/multipage/server-sent-events.html#authoring-notes).
-> Authors are also cautioned that HTTP chunking can have unexpected negative effects on the reliability of this protocol, in particular if the chunking is done by a different layer unaware of the timing requirements. If this is a problem, chunking can be disabled for serving event streams.
-
-To do so, you should HijackWriter with [ChunkedBodyWriter](https://www.cloudwego.io/docs/hertz/tutorials/framework-exten/response_writer/#chunkedbodywriter) before calling sse.Stream.
-```go
-c.Response.HijackWriter(resp.NewChunkedBodyWriter(&c.Response, c.GetWriter()))
-sse.Stream(ctx, c, func(ctx context.Context, w network.ExtWriter) {
-    // send event here
-})
-```
-
 ## Real-world examples
 
 This repository comes with two examples to demonstrate how to build realtime applications with server sent event.
