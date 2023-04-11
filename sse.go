@@ -63,10 +63,7 @@ func Stream(ctx context.Context, c *app.RequestContext, f HandlerFunc) {
 	c.Response.ImmediateHeaderFlush = true
 	writer := c.Response.GetHijackWriter()
 	// set stream body writer
-	if writer == nil {
-		writer = NewStreamBodyWriter(&c.Response, c.GetWriter())
-		c.Response.HijackWriter(writer)
-	}
+	writer = NewStreamBodyWriter(&c.Response, c.GetWriter())
 	f(ctx, writer)
 }
 
