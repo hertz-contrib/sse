@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cloudwego/hertz/pkg/network"
-
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
@@ -69,27 +67,26 @@ func (srv *ChatServer) ServerSentEvent(ctx context.Context, c *app.RequestContex
 	// in production, you would get user's identity in other ways e.g. Authorization
 	username := c.Query("username")
 
+	stream := sse.NewStream(c)
 	// get messages from user's receive channel
-	sse.Stream(ctx, c, func(ctx context.Context, w network.ExtWriter) {
-		for msg := range srv.Receive[username] {
+	for msg := range srv.Receive[username] {
 
-			payload, err := json.Marshal(msg)
-			if err != nil {
-				c.JSON(http.StatusInternalServerError, err.Error())
-				return
-			}
-			hlog.CtxInfof(ctx, "message received: %+v", msg)
-			event := &sse.Event{
-				Event: msg.Type,
-				Data:  string(payload),
-			}
-			c.SetStatusCode(http.StatusOK)
-			err = sse.Render(w, event)
-			if err != nil {
-				return
-			}
+		payload, err := json.Marshal(msg)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, err.Error())
+			return
 		}
-	})
+		hlog.CtxInfof(ctx, "message received: %+v", msg)
+		event := &sse.Event{
+			Event: msg.Type,
+			Data:  string(payload),
+		}
+		c.SetStatusCode(http.StatusOK)
+		err = stream.Publish(event)
+		if err != nil {
+			return
+		}
+	}
 }
 
 func (srv *ChatServer) Direct(ctx context.Context, c *app.RequestContext) {

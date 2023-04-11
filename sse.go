@@ -17,7 +17,6 @@
 package sse
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
@@ -51,32 +50,33 @@ type Event struct {
 	Data  any
 }
 
-type HandlerFunc func(ctx context.Context, w network.ExtWriter)
+// GetLastEventID retrieve Last-Event-ID header if present
+func GetLastEventID(c *app.RequestContext) string {
+	return c.Request.Header.Get(LastEventID)
+}
 
-// Stream set headers for server-sent events and ensure response writer is set,
-// hijack with StreamBodyWriter otherwise
-func Stream(ctx context.Context, c *app.RequestContext, f HandlerFunc) {
+type Stream struct {
+	network.ExtWriter
+}
+
+func NewStream(c *app.RequestContext) *Stream {
 	c.Response.Header.SetContentType(ContentType)
 	if c.Response.Header.Get(cacheControl) == "" {
 		c.Response.Header.Set(cacheControl, noCache)
 	}
+
+	writer := NewStreamBodyWriter(&c.Response, c.GetWriter())
+	c.Response.HijackWriter(writer)
 	c.Response.ImmediateHeaderFlush = true
-	writer := c.Response.GetHijackWriter()
-	// set stream body writer
-	writer = NewStreamBodyWriter(&c.Response, c.GetWriter())
-	f(ctx, writer)
+	return &Stream{
+		writer,
+	}
 }
 
-// Render encodes Event to bytes and send it to peer with immediate Flush.
-func Render(w network.ExtWriter, e *Event) error {
-	err := Encode(w, e)
+func (c *Stream) Publish(event *Event) error {
+	err := Encode(c, event)
 	if err != nil {
 		return fmt.Errorf("encode error: %w", err)
 	}
-	return w.Flush()
-}
-
-// GetLastEventID retrieve Last-Event-ID header if present
-func GetLastEventID(c *app.RequestContext) string {
-	return c.Request.Header.Get(LastEventID)
+	return c.Flush()
 }

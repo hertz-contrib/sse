@@ -19,16 +19,14 @@ package sse
 import (
 	"bytes"
 	"context"
-	"github.com/r3labs/sse/v2"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/cloudwego/hertz/pkg/network"
+	"github.com/r3labs/sse/v2"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -44,14 +42,11 @@ func TestStreamRender(t *testing.T) {
 
 	go func() {
 		h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
-			c.Response.SetConnectionClose()
-			Stream(ctx, c, func(ctx context.Context, w network.ExtWriter) {
-				for _, e := range expected {
-					time.Sleep(time.Millisecond * 100)
-					_ = Render(w, &e)
-				}
-				return
-			})
+			stream := NewStream(c)
+			for _, e := range expected {
+				time.Sleep(time.Millisecond * 100)
+				_ = stream.Publish(&e)
+			}
 		})
 		h.Spin()
 	}()
@@ -78,7 +73,6 @@ func TestStreamRender(t *testing.T) {
 	}
 
 	assert.Equal(t, expected, got)
-
 }
 
 func TestLastEventID(t *testing.T) {
@@ -99,21 +93,6 @@ func (b NoOpsExtWriter) Flush() error {
 
 func (b NoOpsExtWriter) Finalize() error {
 	return nil
-}
-
-func BenchmarkResponseWriter(b *testing.B) {
-	var resp protocol.Response
-	b.ResetTimer()
-	b.ReportAllocs()
-	resp.HijackWriter(&NoOpsExtWriter{})
-
-	for i := 0; i < b.N; i++ {
-		event := &Event{
-			Event: "new_message",
-			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
-		}
-		_ = Render(resp.GetHijackWriter(), event)
-	}
 }
 
 func BenchmarkFullSSE(b *testing.B) {

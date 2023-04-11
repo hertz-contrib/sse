@@ -22,8 +22,6 @@ import (
 
 	"github.com/hertz-contrib/sse"
 
-	"github.com/cloudwego/hertz/pkg/network"
-
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
@@ -39,20 +37,17 @@ func main() {
 
 		// you must set status code and response headers before first render call
 		c.SetStatusCode(http.StatusOK)
-
-		sse.Stream(ctx, c, func(ctx context.Context, w network.ExtWriter) {
-			// send a timestamp event to client with current time every second
-			for t := range time.NewTicker(1 * time.Second).C {
-				event := &sse.Event{
-					Event: "timestamp",
-					Data:  t.Format(time.RFC3339),
-				}
-				err := sse.Render(w, event)
-				if err != nil {
-					return
-				}
+		s := sse.NewStream(c)
+		for t := range time.NewTicker(1 * time.Second).C {
+			event := &sse.Event{
+				Event: "timestamp",
+				Data:  t.Format(time.RFC3339),
 			}
-		})
+			err := s.Publish(event)
+			if err != nil {
+				return
+			}
+		}
 	})
 
 	h.Spin()

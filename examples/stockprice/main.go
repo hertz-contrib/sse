@@ -11,8 +11,6 @@ import (
 
 	"github.com/hertz-contrib/sse"
 
-	"github.com/cloudwego/hertz/pkg/network"
-
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 )
@@ -66,12 +64,10 @@ func main() {
 			return
 		}
 		c.SetStatusCode(http.StatusOK)
-
-		sse.Stream(ctx, c, func(ctx context.Context, w network.ExtWriter) {
-			for event := range clientChan {
-				_ = sse.Render(w, &event)
-			}
-		})
+		stream := sse.NewStream(c)
+		for event := range clientChan {
+			_ = stream.Publish(&event)
+		}
 	})
 
 	h.Spin()
