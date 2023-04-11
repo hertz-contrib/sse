@@ -69,7 +69,7 @@ func main() {
 
 		sse.Stream(ctx, c, func(ctx context.Context, w network.ExtWriter) {
 			for event := range clientChan {
-				_ = event.Render(w)
+				_ = sse.Render(w, &event)
 			}
 		})
 	})

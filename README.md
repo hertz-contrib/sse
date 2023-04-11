@@ -20,9 +20,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/hertz-contrib/sse"
+
 	"github.com/cloudwego/hertz/pkg/network"
 
-	"github.com/Haswf/sse"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
@@ -46,7 +47,7 @@ func main() {
 					Event: "timestamp",
 					Data:  t.Format(time.RFC3339),
 				}
-				err := event.Render(w)
+				err := sse.Render(w, event)
 				if err != nil {
 					return
 				}
