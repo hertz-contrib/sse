@@ -63,7 +63,7 @@ func main() {
 
 ## Install
 ```
-go get github.com/Haswf/sse
+go get github.com/hertz-contrib/sse
 ```
 
 ## Headers
