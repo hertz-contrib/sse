@@ -63,11 +63,11 @@ go get github.com/hertz-contrib/sse
 
 ## Headers
 
-The following headers are set when sse.Stream is called:
+The following headers are set when `sse.NewStream` is called:
 - ContentType: text/event-stream (always)
 - Cache-Control: no-cache (if not set)
 
-It's recommended to set `X-Accel-Buffering: no` if there is any proxy sitting between the server and the client.
+It's recommended to set `X-Accel-Buffering: no` if there is any proxy sitting between server and client.
 
 Also see:
 - [Server Sent Events are still not production ready after a decade. A lesson for me, a warning for you!](https://dev.to/miketalbot/server-sent-events-are-still-not-production-ready-after-a-decade-a-lesson-for-me-a-warning-for-you-2gie)
@@ -75,7 +75,7 @@ Also see:
 
 ## Real-world examples
 
-This repository comes with two examples to demonstrate how to build realtime applications with server sent event.
+This repository comes with two examples to demonstrate how to build realtime applications with server-sent event.
 
 ### Stock Price (examples/stockprice)
 A web server that push (randomly generated) stock price periodically.
@@ -104,7 +104,7 @@ curl -N --location 'localhost:8888/price'
 
 
 ### Chat Server (examples/chat)
-- an in-memory chat server that push new messages to clients using server-sent events. It supports both direct and broadcast messaging.
+- A chat server that push new messages to clients using server-sent events. It supports both direct and broadcast messaging.
 1. Run `exmaples/chat/main.go` to start server.
 2. Send a get request to `/chat/sse`.
 ```bash
