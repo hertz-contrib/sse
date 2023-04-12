@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/cloudwego/hertz v0.6.1
 	github.com/cloudwego/hertz/cmd/hz v0.6.1
-	github.com/stretchr/testify v1.8.1
+	github.com/r3labs/sse/v2 v2.10.0
 )
 
 require (
@@ -14,7 +14,6 @@ require (
 	github.com/bytedance/sonic v1.8.1 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/cloudwego/netpoll v0.3.1 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
 	github.com/hashicorp/go-version v1.5.0 // indirect
@@ -22,8 +21,6 @@ require (
 	github.com/henrylee2cn/goutil v0.0.0-20210127050712-89660552f6f8 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
 	github.com/nyaruka/phonenumbers v1.0.55 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/r3labs/sse/v2 v2.10.0 // indirect
 	github.com/tidwall/gjson v1.13.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
@@ -35,5 +32,4 @@ require (
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

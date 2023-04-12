@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/cloudwego/hertz/pkg/common/test/assert"
 )
 
 type myStruct struct {
@@ -153,8 +153,8 @@ data:
 		var b bytes.Buffer
 		err := Encode(&b, tt.Event)
 		got := b.String()
-		assert.NoError(t, err)
-		assert.Equal(t, string(got), tt.Want)
+		assert.Nil(t, err)
+		assert.DeepEqual(t, string(got), tt.Want)
 	}
 }
 
@@ -165,14 +165,14 @@ func TestEncodeStream(t *testing.T) {
 		Data:  "1.5",
 	}
 	err := Encode(w, event)
-	assert.NoError(t, err)
+	assert.Nil(t, err)
 
 	event = &Event{
 		ID:   "123",
 		Data: map[string]interface{}{"foo": "bar", "bar": "foo"},
 	}
 	err = Encode(w, event)
-	assert.NoError(t, err)
+	assert.Nil(t, err)
 
 	event = &Event{
 		ID:    "124",
@@ -180,6 +180,51 @@ func TestEncodeStream(t *testing.T) {
 		Data:  "hi! dude",
 	}
 	err = Encode(w, event)
-	assert.NoError(t, err)
-	assert.Equal(t, "event:float\ndata:1.5\n\nid:123\ndata:{\"bar\":\"foo\",\"foo\":\"bar\"}\n\nid:124\nevent:chat\ndata:hi! dude\n\n", w.String())
+	assert.Nil(t, err)
+	assert.DeepEqual(t, "event:float\ndata:1.5\n\nid:123\ndata:{\"bar\":\"foo\",\"foo\":\"bar\"}\n\nid:124\nevent:chat\ndata:hi! dude\n\n", w.String())
+}
+
+func BenchmarkFullSSE(b *testing.B) {
+	buf := new(bytes.Buffer)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		_ = Encode(buf, &Event{
+			Event: "new_message",
+			ID:    "13435",
+			Retry: 10,
+			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
+		})
+		buf.Reset()
+	}
+}
+
+func BenchmarkNoRetrySSE(b *testing.B) {
+	buf := new(bytes.Buffer)
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = Encode(buf, &Event{
+			Event: "new_message",
+			ID:    "13435",
+			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
+		})
+		buf.Reset()
+	}
+}
+
+func BenchmarkSimpleSSE(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+	buf := new(bytes.Buffer)
+
+	for i := 0; i < b.N; i++ {
+		_ = Encode(buf, &Event{
+			Event: "new_message",
+			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
+		})
+		buf.Reset()
+	}
 }

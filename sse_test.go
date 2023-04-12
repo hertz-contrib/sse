@@ -27,7 +27,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/stretchr/testify/assert"
+	"github.com/cloudwego/hertz/pkg/common/test/assert"
 )
 
 func TestStreamRender(t *testing.T) {
@@ -59,7 +59,7 @@ func TestStreamRender(t *testing.T) {
 
 	c := sse.NewClient("http://127.0.0.1:8888/sse")
 	err := c.SubscribeChan("counter", events)
-	assert.NoError(t, err)
+	assert.Nil(t, err)
 
 	var got []Event
 	for e := range events {
@@ -72,70 +72,51 @@ func TestStreamRender(t *testing.T) {
 		}
 	}
 
-	assert.Equal(t, expected, got)
+	assert.DeepEqual(t, expected, got)
+}
+
+func TestNewStream(t *testing.T) {
+	var c app.RequestContext
+	s := NewStream(&c)
+
+	assert.DeepEqual(t, ContentType, string(c.Response.Header.ContentType()))
+	assert.DeepEqual(t, noCache, c.Response.Header.Get(cacheControl))
+	assert.NotNil(t, c.Response.GetHijackWriter())
+	assert.NotNil(t, s)
+}
+
+type BufferExtWriter struct {
+	buffer *bytes.Buffer
+}
+
+func (b BufferExtWriter) Write(p []byte) (n int, err error) {
+	return b.buffer.Write(p)
+}
+
+func (b BufferExtWriter) Flush() error {
+	return nil
+}
+
+func (b BufferExtWriter) Finalize() error {
+	return nil
+}
+
+func TestStreamPublish(t *testing.T) {
+	var c app.RequestContext
+	s := NewStream(&c)
+	var buffer bytes.Buffer
+	s.w = &BufferExtWriter{
+		buffer: &buffer,
+	}
+	err := s.Publish(&Event{
+		Data: "hertz",
+	})
+	assert.Nil(t, err)
+	assert.DeepEqual(t, "data:hertz\n\n", buffer.String())
 }
 
 func TestLastEventID(t *testing.T) {
-	var req app.RequestContext
-	req.Request.Header.Set(LastEventID, "1")
-	assert.Equal(t, "1", GetLastEventID(&req))
-}
-
-type NoOpsExtWriter struct{}
-
-func (b NoOpsExtWriter) Write(_ []byte) (n int, err error) {
-	return 0, nil
-}
-
-func (b NoOpsExtWriter) Flush() error {
-	return nil
-}
-
-func (b NoOpsExtWriter) Finalize() error {
-	return nil
-}
-
-func BenchmarkFullSSE(b *testing.B) {
-	buf := new(bytes.Buffer)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-
-	for i := 0; i < b.N; i++ {
-		_ = Encode(buf, &Event{
-			Event: "new_message",
-			ID:    "13435",
-			Retry: 10,
-			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
-		})
-		buf.Reset()
-	}
-}
-
-func BenchmarkNoRetrySSE(b *testing.B) {
-	buf := new(bytes.Buffer)
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		_ = Encode(buf, &Event{
-			Event: "new_message",
-			ID:    "13435",
-			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
-		})
-		buf.Reset()
-	}
-}
-
-func BenchmarkSimpleSSE(b *testing.B) {
-	b.ResetTimer()
-	b.ReportAllocs()
-	buf := new(bytes.Buffer)
-
-	for i := 0; i < b.N; i++ {
-		_ = Encode(buf, &Event{
-			Event: "new_message",
-			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
-		})
-		buf.Reset()
-	}
+	var c app.RequestContext
+	c.Request.Header.Set(LastEventID, "1")
+	assert.DeepEqual(t, "1", GetLastEventID(&c))
 }

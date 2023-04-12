@@ -56,7 +56,7 @@ func GetLastEventID(c *app.RequestContext) string {
 }
 
 type Stream struct {
-	network.ExtWriter
+	w network.ExtWriter
 }
 
 func NewStream(c *app.RequestContext) *Stream {
@@ -67,16 +67,15 @@ func NewStream(c *app.RequestContext) *Stream {
 
 	writer := NewStreamBodyWriter(&c.Response, c.GetWriter())
 	c.Response.HijackWriter(writer)
-	c.Response.ImmediateHeaderFlush = true
 	return &Stream{
 		writer,
 	}
 }
 
 func (c *Stream) Publish(event *Event) error {
-	err := Encode(c, event)
+	err := Encode(c.w, event)
 	if err != nil {
 		return fmt.Errorf("encode error: %w", err)
 	}
-	return c.Flush()
+	return c.w.Flush()
 }

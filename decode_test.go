@@ -20,7 +20,7 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/cloudwego/hertz/pkg/common/test/assert"
 )
 
 func TestDecodeSingle1(t *testing.T) {
@@ -33,10 +33,10 @@ id: 123456789010
 : and multiple comments should not break it
 data: a very nice one`))
 
-	assert.NoError(t, err)
-	assert.Len(t, events, 1)
-	assert.Equal(t, events[0].Event, "message")
-	assert.Equal(t, events[0].ID, "123456789010")
+	assert.Nil(t, err)
+	assert.Assert(t, len(events) == 1)
+	assert.DeepEqual(t, events[0].Event, "message")
+	assert.DeepEqual(t, events[0].ID, "123456789010")
 }
 
 func TestDecodeSingle2(t *testing.T) {
@@ -54,10 +54,10 @@ data:a very nice one\n!
 
 
 `))
-	assert.NoError(t, err)
-	assert.Len(t, events, 1)
-	assert.Equal(t, events[0].Event, "a message\\n\\n")
-	assert.Equal(t, events[0].ID, "1234567890\\n10")
+	assert.Nil(t, err)
+	assert.Assert(t, len(events) == 1)
+	assert.DeepEqual(t, events[0].Event, "a message\\n\\n")
+	assert.DeepEqual(t, events[0].ID, "1234567890\\n10")
 }
 
 func TestDecodeSingle3(t *testing.T) {
@@ -72,10 +72,10 @@ data:
 data
 : ending with a comment`))
 
-	assert.NoError(t, err)
-	assert.Len(t, events, 1)
-	assert.Equal(t, events[0].Event, "message123")
-	assert.Equal(t, events[0].ID, "123456ABCabc789010")
+	assert.Nil(t, err)
+	assert.Assert(t, len(events) == 1)
+	assert.DeepEqual(t, events[0].Event, "message123")
+	assert.DeepEqual(t, events[0].ID, "123456ABCabc789010")
 }
 
 func TestDecodeMulti1(t *testing.T) {
@@ -108,10 +108,10 @@ data
 event:
 
 id`))
-	assert.NoError(t, err)
-	assert.Len(t, events, 3)
-	assert.Equal(t, events[0].Event, "weird event")
-	assert.Equal(t, events[0].ID, "")
+	assert.Nil(t, err)
+	assert.DeepEqual(t, len(events), 3)
+	assert.DeepEqual(t, events[0].Event, "weird event")
+	assert.DeepEqual(t, events[0].ID, "")
 }
 
 func TestDecodeW3C(t *testing.T) {
@@ -123,6 +123,6 @@ data
 
 data:
 `))
-	assert.NoError(t, err)
-	assert.Len(t, events, 1)
+	assert.Nil(t, err)
+	assert.DeepEqual(t, len(events), 1)
 }
