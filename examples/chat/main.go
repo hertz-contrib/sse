@@ -170,8 +170,8 @@ func (srv *ChatServer) CreateReceiveChannel() app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		username := c.Query("username")
 		// if user doesn't have a channel yet, create a new one.
-		if receive, found := srv.Receive[username]; !found {
-			receive = make(chan ChatMessage, 1000)
+		if _, found := srv.Receive[username]; !found {
+			receive := make(chan ChatMessage, 1000)
 			srv.Receive[username] = receive
 		}
 		c.Next(ctx)
