@@ -47,7 +47,7 @@ type Event struct {
 	Event string
 	ID    string
 	Retry uint
-	Data  any
+	Data  interface{}
 }
 
 // GetLastEventID retrieve Last-Event-ID header if present
