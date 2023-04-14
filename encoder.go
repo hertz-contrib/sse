@@ -17,13 +17,10 @@
 package sse
 
 import (
-	"fmt"
 	"io"
-	"reflect"
 	"strconv"
 
 	"github.com/cloudwego/hertz/cmd/hz/util"
-	"github.com/cloudwego/hertz/pkg/common/json"
 )
 
 func Encode(w io.Writer, e *Event) (err error) {
@@ -85,13 +82,13 @@ func writeEvent(w io.Writer, event string) (err error) {
 	return
 }
 
-func writeRetry(w io.Writer, retry uint) (err error) {
+func writeRetry(w io.Writer, retry uint64) (err error) {
 	if retry > 0 {
 		_, err = w.Write([]byte("retry:"))
 		if err != nil {
 			return
 		}
-		_, err = w.Write(util.Str2Bytes(strconv.FormatUint(uint64(retry), 10)))
+		_, err = w.Write(util.Str2Bytes(strconv.FormatUint(retry, 10)))
 		if err != nil {
 			return
 		}
@@ -104,39 +101,21 @@ func writeRetry(w io.Writer, retry uint) (err error) {
 	return
 }
 
-func writeData(w io.Writer, data interface{}) (err error) {
+func writeData(w io.Writer, data []byte) (err error) {
 	_, err = w.Write([]byte("data:"))
 	if err != nil {
-		return err
+		return
 	}
-	switch kindOfData(data) {
-	case reflect.Struct, reflect.Slice, reflect.Map:
-		err = json.NewEncoder(w).Encode(data)
-		if err != nil {
-			return err
-		}
-		_, err = w.Write([]byte("\n"))
-		if err != nil {
-			return
-		}
-	default:
-		_, err = dataReplacer.WriteString(w, fmt.Sprint(data))
-		if err != nil {
-			return
-		}
-		_, err = w.Write([]byte("\n\n"))
-		if err != nil {
-			return
-		}
-	}
-	return nil
-}
 
-func kindOfData(data interface{}) reflect.Kind {
-	value := reflect.ValueOf(data)
-	valueType := value.Kind()
-	if valueType == reflect.Ptr {
-		valueType = value.Elem().Kind()
+	_, err = dataReplacer.WriteString(w, util.Bytes2Str(data))
+	if err != nil {
+		return
 	}
-	return valueType
+
+	_, err = w.Write([]byte("\n\n"))
+	if err != nil {
+		return
+	}
+
+	return nil
 }

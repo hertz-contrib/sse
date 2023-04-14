@@ -42,7 +42,7 @@ func main() {
 		for t := range time.NewTicker(1 * time.Second).C {
 			event := &sse.Event{
 				Event: "timestamp",
-				Data:  t.Format(time.RFC3339),
+				Data:  []byte(t.Format(time.RFC3339)),
 			}
 			err := s.Publish(event)
 			if err != nil {

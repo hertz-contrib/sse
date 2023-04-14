@@ -63,7 +63,7 @@ func main() {
 			now := time.Now()
 			for _, stock := range []string{"AAPL", "AMZN"} {
 				// Send current time to clients message channel
-				srv.Price <- sse.Event{Event: stock, ID: strconv.FormatInt(now.UnixMilli(), 10), Data: fmt.Sprintf("%f", rand.Float64()*100)}
+				srv.Price <- sse.Event{Event: stock, ID: strconv.FormatInt(now.UnixMilli(), 10), Data: []byte(fmt.Sprintf("%f", rand.Float64()*100))}
 			}
 		}
 	}()

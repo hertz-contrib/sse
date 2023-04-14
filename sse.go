@@ -17,7 +17,6 @@
 package sse
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -46,11 +45,11 @@ var dataReplacer = strings.NewReplacer(
 type Event struct {
 	Event string
 	ID    string
-	Retry uint
-	Data  interface{}
+	Retry uint64
+	Data  []byte
 }
 
-// GetLastEventID retrieve Last-Event-ID header if present
+// GetLastEventID retrieve Last-Event-ID header if present.
 func GetLastEventID(c *app.RequestContext) string {
 	return c.Request.Header.Get(LastEventID)
 }
@@ -59,6 +58,7 @@ type Stream struct {
 	w network.ExtWriter
 }
 
+// NewStream creates a new stream for publishing Event.
 func NewStream(c *app.RequestContext) *Stream {
 	c.Response.Header.SetContentType(ContentType)
 	if c.Response.Header.Get(cacheControl) == "" {
@@ -72,10 +72,11 @@ func NewStream(c *app.RequestContext) *Stream {
 	}
 }
 
+// Publish push an event to client.
 func (c *Stream) Publish(event *Event) error {
 	err := Encode(c.w, event)
 	if err != nil {
-		return fmt.Errorf("encode error: %w", err)
+		return err
 	}
 	return c.w.Flush()
 }

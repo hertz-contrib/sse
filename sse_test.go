@@ -36,7 +36,7 @@ func TestStreamRender(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		expected = append(expected, Event{
 			Event: "counter",
-			Data:  strconv.FormatInt(int64(i), 10),
+			Data:  []byte(strconv.FormatInt(int64(i), 10)),
 		})
 	}
 
@@ -65,7 +65,7 @@ func TestStreamRender(t *testing.T) {
 	for e := range events {
 		got = append(got, Event{
 			Event: string(e.Event),
-			Data:  string(e.Data),
+			Data:  e.Data,
 		})
 		if len(got) == len(expected) {
 			close(events)
@@ -109,7 +109,7 @@ func TestStreamPublish(t *testing.T) {
 		buffer: &buffer,
 	}
 	err := s.Publish(&Event{
-		Data: "hertz",
+		Data: []byte("hertz"),
 	})
 	assert.Nil(t, err)
 	assert.DeepEqual(t, "data:hertz\n\n", buffer.String())

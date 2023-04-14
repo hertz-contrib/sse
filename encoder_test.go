@@ -20,12 +20,19 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/cloudwego/hertz/pkg/common/json"
+
 	"github.com/cloudwego/hertz/pkg/common/test/assert"
 )
 
 type myStruct struct {
 	A int
 	B string `json:"value"`
+}
+
+func unsafeMarshal(v interface{}) []byte {
+	b, _ := json.Marshal(v)
+	return b
 }
 
 func TestEncode(t *testing.T) {
@@ -44,7 +51,7 @@ data:id:fake
 
 `,
 			Event: &Event{
-				Data: "junk\n\njk\nid:fake",
+				Data: []byte("junk\n\njk\nid:fake"),
 			},
 		},
 		{
@@ -58,14 +65,14 @@ data:id:fake
 `,
 			Event: &Event{
 				Event: "t\n:<>\r\test",
-				Data:  "junk\n\njk\nid:fake",
+				Data:  []byte("junk\n\njk\nid:fake"),
 			},
 		},
 		{
 			Name: "with id",
 			Event: &Event{
 				ID:   "t\n:<>\r\test",
-				Data: "junk\n\njk\nid:fa\rke",
+				Data: []byte("junk\n\njk\nid:fa\rke"),
 			},
 			Want: `id:t\n:<>\r	est
 data:junk
@@ -79,7 +86,7 @@ data:id:fa\rke
 			Name: "with retry",
 			Event: &Event{
 				Retry: 11,
-				Data:  "junk\n\njk\nid:fake\n",
+				Data:  []byte("junk\n\njk\nid:fake\n"),
 			},
 			Want: `retry:11
 data:junk
@@ -96,7 +103,7 @@ data:
 				Event: "abc",
 				ID:    "12345",
 				Retry: 10,
-				Data:  "some data",
+				Data:  []byte("some data"),
 			},
 			Want: "id:12345\nevent:abc\nretry:10\ndata:some data\n\n",
 		},
@@ -104,7 +111,7 @@ data:
 			Name: "encode map",
 			Event: &Event{
 				Event: "a slice",
-				Data:  myStruct{1, "number"},
+				Data:  unsafeMarshal(myStruct{1, "number"}),
 			},
 			Want: "event:a slice\ndata:{\"A\":1,\"value\":\"number\"}\n\n",
 		},
@@ -112,7 +119,7 @@ data:
 			Name: "encode struct",
 			Event: &Event{
 				Event: "a struct",
-				Data:  myStruct{1, "number"},
+				Data:  unsafeMarshal(myStruct{1, "number"}),
 			},
 			Want: "event:a struct\ndata:{\"A\":1,\"value\":\"number\"}\n\n",
 		},
@@ -120,7 +127,7 @@ data:
 			Name: "struct pointer",
 			Event: &Event{
 				Event: "a struct",
-				Data:  &myStruct{1, "number"},
+				Data:  unsafeMarshal(&myStruct{1, "number"}),
 			},
 			Want: "event:a struct\ndata:{\"A\":1,\"value\":\"number\"}\n\n",
 		},
@@ -128,7 +135,7 @@ data:
 			Name: "encode integer",
 			Event: &Event{
 				Event: "an integer",
-				Data:  1,
+				Data:  []byte("1"),
 			},
 			Want: "event:an integer\ndata:1\n\n",
 		},
@@ -136,7 +143,7 @@ data:
 			Name: "encode float",
 			Event: &Event{
 				Event: "Float",
-				Data:  1.5,
+				Data:  []byte("1.5"),
 			},
 			Want: "event:Float\ndata:1.5\n\n",
 		},
@@ -144,7 +151,7 @@ data:
 			Name: "encode string",
 			Event: &Event{
 				Event: "String",
-				Data:  "hertz",
+				Data:  []byte("hertz"),
 			},
 			Want: "event:String\ndata:hertz\n\n",
 		},
@@ -154,7 +161,7 @@ data:
 		err := Encode(&b, tt.Event)
 		got := b.String()
 		assert.Nil(t, err)
-		assert.DeepEqual(t, string(got), tt.Want)
+		assert.DeepEqual(t, got, tt.Want)
 	}
 }
 
@@ -162,14 +169,14 @@ func TestEncodeStream(t *testing.T) {
 	w := new(bytes.Buffer)
 	event := &Event{
 		Event: "float",
-		Data:  "1.5",
+		Data:  []byte("1.5"),
 	}
 	err := Encode(w, event)
 	assert.Nil(t, err)
 
 	event = &Event{
 		ID:   "123",
-		Data: map[string]interface{}{"foo": "bar", "bar": "foo"},
+		Data: unsafeMarshal(map[string]interface{}{"foo": "bar", "bar": "foo"}),
 	}
 	err = Encode(w, event)
 	assert.Nil(t, err)
@@ -177,7 +184,7 @@ func TestEncodeStream(t *testing.T) {
 	event = &Event{
 		ID:    "124",
 		Event: "chat",
-		Data:  "hi! dude",
+		Data:  []byte("hi! dude"),
 	}
 	err = Encode(w, event)
 	assert.Nil(t, err)
@@ -195,7 +202,7 @@ func BenchmarkFullSSE(b *testing.B) {
 			Event: "new_message",
 			ID:    "13435",
 			Retry: 10,
-			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
+			Data:  []byte("hi! how are you? I am fine. this is a long stupid message!!!"),
 		})
 		buf.Reset()
 	}
@@ -209,7 +216,7 @@ func BenchmarkNoRetrySSE(b *testing.B) {
 		_ = Encode(buf, &Event{
 			Event: "new_message",
 			ID:    "13435",
-			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
+			Data:  []byte("hi! how are you? I am fine. this is a long stupid message!!!"),
 		})
 		buf.Reset()
 	}
@@ -223,7 +230,7 @@ func BenchmarkSimpleSSE(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_ = Encode(buf, &Event{
 			Event: "new_message",
-			Data:  "hi! how are you? I am fine. this is a long stupid message!!!",
+			Data:  []byte("hi! how are you? I am fine. this is a long stupid message!!!"),
 		})
 		buf.Reset()
 	}

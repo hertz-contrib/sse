@@ -95,7 +95,7 @@ func (srv *ChatServer) ServerSentEvent(ctx context.Context, c *app.RequestContex
 		hlog.CtxInfof(ctx, "message received: %+v", msg)
 		event := &sse.Event{
 			Event: msg.Type,
-			Data:  string(payload),
+			Data:  payload,
 		}
 		c.SetStatusCode(http.StatusOK)
 		err = stream.Publish(event)
