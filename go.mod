@@ -4,7 +4,6 @@ go 1.18
 
 require (
 	github.com/cloudwego/hertz v0.6.1
-	github.com/cloudwego/hertz/cmd/hz v0.6.1
 	github.com/r3labs/sse/v2 v2.10.0
 )
 
@@ -16,7 +15,6 @@ require (
 	github.com/cloudwego/netpoll v0.3.1 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
 	github.com/golang/protobuf v1.5.0 // indirect
-	github.com/hashicorp/go-version v1.5.0 // indirect
 	github.com/henrylee2cn/ameda v1.4.10 // indirect
 	github.com/henrylee2cn/goutil v0.0.0-20210127050712-89660552f6f8 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
@@ -28,8 +26,6 @@ require (
 	golang.org/x/arch v0.0.0-20210923205945-b76863e36670 // indirect
 	golang.org/x/net v0.3.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/tools v0.4.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
 	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
