@@ -19,6 +19,8 @@ package sse
 import (
 	"strings"
 
+	"github.com/cloudwego/hertz/pkg/protocol/http1/resp"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/network"
 )
@@ -65,7 +67,7 @@ func NewStream(c *app.RequestContext) *Stream {
 		c.Response.Header.Set(cacheControl, noCache)
 	}
 
-	writer := NewStreamBodyWriter(&c.Response, c.GetWriter())
+	writer := resp.NewChunkedBodyWriter(&c.Response, c.GetWriter())
 	c.Response.HijackWriter(writer)
 	return &Stream{
 		writer,
