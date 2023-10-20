@@ -62,9 +62,10 @@ type Client struct {
 
 // NewClient creates a new client
 func NewClient(url string, opts ...func(c *Client)) *Client {
+	hertzClient, _ := client.NewClient(client.WithResponseBodyStream(true))
 	c := &Client{
 		URL:           url,
-		HertzClient:   &client.Client{},
+		HertzClient:   hertzClient,
 		Headers:       make(map[string]string),
 		subscribed:    make(map[chan *Event]chan struct{}),
 		maxBufferSize: 1 << 16,
@@ -83,9 +84,13 @@ func (c *Client) Subscribe(stream string, handler func(msg *Event)) error {
 }
 
 // SubscribeWithContext to a data stream with context
-func (c *Client) SubscribeWithContext(ctx context.Context, stream string, handler func(msg *Event)) error {
+func (c *Client) SubscribeWithContext(ctx context.Context, req *protocol.Request, stream string, handler func(msg *Event)) error {
 	operation := func() error {
-		resp, err := c.request(ctx, stream)
+		resp, err := c.request(ctx, req, stream)
+		defer func() {
+			protocol.ReleaseRequest(req)
+			protocol.ReleaseResponse(resp)
+		}()
 		if err != nil {
 			return err
 		}
@@ -129,7 +134,7 @@ func (c *Client) SubscribeChan(stream string, ch chan *Event) error {
 }
 
 // SubscribeChanWithContext sends all events to the provided channel with context
-func (c *Client) SubscribeChanWithContext(ctx context.Context, stream string, ch chan *Event) error {
+func (c *Client) SubscribeChanWithContext(ctx context.Context, req *protocol.Request, stream string, ch chan *Event) error {
 	var connected bool
 	errch := make(chan error)
 	c.mu.Lock()
@@ -137,7 +142,11 @@ func (c *Client) SubscribeChanWithContext(ctx context.Context, stream string, ch
 	c.mu.Unlock()
 
 	operation := func() error {
-		resp, err := c.request(ctx, stream)
+		resp, err := c.request(ctx, req, stream)
+		defer func() {
+			protocol.ReleaseRequest(req)
+			protocol.ReleaseResponse(resp)
+		}()
 		if err != nil {
 			return err
 		}
@@ -291,8 +300,8 @@ func (c *Client) OnConnect(fn ConnCallback) {
 	c.connectedcb = fn
 }
 
-func (c *Client) request(ctx context.Context, stream string) (*protocol.Response, error) {
-	req, resp := protocol.AcquireRequest(), protocol.AcquireResponse()
+func (c *Client) request(ctx context.Context, req *protocol.Request, stream string) (*protocol.Response, error) {
+	resp := protocol.AcquireResponse()
 	req.SetMethod("GET")
 	req.SetRequestURI(c.URL)
 
