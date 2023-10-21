@@ -391,6 +391,7 @@ func (c *Client) processEvent(msg []byte) (event *Event, err error) {
 		n, err := base64.StdEncoding.Decode(buf, e.Data)
 		if err != nil {
 			err = fmt.Errorf("failed to decode event message: %s", err)
+			return &e, err
 		}
 		e.Data = buf[:n]
 	}
