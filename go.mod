@@ -5,6 +5,7 @@ go 1.18
 require (
 	github.com/cloudwego/hertz v0.6.1
 	github.com/r3labs/sse/v2 v2.10.0
+	gopkg.in/cenkalti/backoff.v1 v1.1.0
 )
 
 require (
@@ -27,5 +28,4 @@ require (
 	golang.org/x/net v0.3.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
-	gopkg.in/cenkalti/backoff.v1 v1.1.0 // indirect
 )

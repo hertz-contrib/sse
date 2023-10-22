@@ -23,13 +23,17 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/cloudwego/hertz/pkg/app/client"
-	"github.com/cloudwego/hertz/pkg/protocol"
 	"io"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/cloudwego/hertz/pkg/network/standard"
+
+	"github.com/cloudwego/hertz/pkg/app/client"
+	"github.com/cloudwego/hertz/pkg/protocol"
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
 
 	"gopkg.in/cenkalti/backoff.v1"
 )
@@ -41,64 +45,58 @@ var (
 	headerRetry = []byte("retry:")
 )
 
-func ClientMaxBufferSize(s int) func(c *Client) {
-	return func(c *Client) {
-		c.maxBufferSize = s
-	}
-}
-
 // ConnCallback defines a function to be called on a particular connection event
-type ConnCallback func(c *Client)
+type ConnCallback func(c *SSEClient)
 
 // ResponseValidator validates a response
-type ResponseValidator func(c *Client, resp *protocol.Response) error
+type ResponseValidator func(c *SSEClient, resp *protocol.Response) error
 
-// Client handles an incoming server stream
-type Client struct {
-	Retry             time.Time
-	ReconnectStrategy backoff.BackOff
-	disconnectcb      ConnCallback
-	connectedcb       ConnCallback
-	subscribed        map[chan *Event]chan struct{}
-	Headers           map[string]string
-	ReconnectNotify   backoff.Notify
-	ResponseValidator ResponseValidator
-	HertzClient       *client.Client
-	URL               string
-	LastEventID       atomic.Value // []byte
-	maxBufferSize     int
-	mu                sync.Mutex
-	EncodingBase64    bool
-	Connected         bool
+// SSEClient handles an incoming server stream
+type SSEClient struct {
+	Retry              time.Time
+	ReconnectStrategy  backoff.BackOff
+	disconnectCallback ConnCallback
+	connectedCallback  ConnCallback
+	subscribed         map[chan *Event]chan struct{}
+	ReconnectNotify    backoff.Notify
+	ResponseValidator  ResponseValidator
+	HertzClient        *client.Client
+	URL                string
+	Headers            map[string]string
+	Method             string
+	LastEventID        atomic.Value // []byte
+	maxBufferSize      int
+	mu                 sync.Mutex
+	EncodingBase64     bool
+	Connected          bool
 }
 
+var defaultClient, _ = client.NewClient(client.WithResponseBodyStream(true), client.WithDialer(standard.NewDialer()))
+
 // NewClient creates a new client
-func NewClient(url string, opts ...func(c *Client)) *Client {
-	hertzClient, _ := client.NewClient(client.WithResponseBodyStream(true))
-	c := &Client{
+func NewClient(url string) *SSEClient {
+	c := &SSEClient{
 		URL:           url,
-		HertzClient:   hertzClient,
+		HertzClient:   defaultClient,
 		Headers:       make(map[string]string),
 		subscribed:    make(map[chan *Event]chan struct{}),
 		maxBufferSize: 1 << 16,
-	}
-
-	for _, opt := range opts {
-		opt(c)
+		Method:        consts.MethodGet,
 	}
 
 	return c
 }
 
 // Subscribe to a data stream
-func (c *Client) Subscribe(stream string, req *protocol.Request, handler func(msg *Event)) error {
-	return c.SubscribeWithContext(context.Background(), req, stream, handler)
+func (c *SSEClient) Subscribe(stream string, handler func(msg *Event)) error {
+	return c.SubscribeWithContext(context.Background(), stream, handler)
 }
 
 // SubscribeWithContext to a data stream with context
-func (c *Client) SubscribeWithContext(ctx context.Context, req *protocol.Request, stream string, handler func(msg *Event)) error {
+func (c *SSEClient) SubscribeWithContext(ctx context.Context, stream string, handler func(msg *Event)) error {
 	operation := func() error {
-		resp, err := c.request(ctx, req, stream)
+		req, resp := protocol.AcquireRequest(), protocol.AcquireResponse()
+		err := c.request(ctx, req, resp, stream)
 		defer func() {
 			protocol.ReleaseRequest(req)
 			protocol.ReleaseResponse(resp)
@@ -141,12 +139,12 @@ func (c *Client) SubscribeWithContext(ctx context.Context, req *protocol.Request
 }
 
 // SubscribeChan sends all events to the provided channel
-func (c *Client) SubscribeChan(req *protocol.Request, stream string, ch chan *Event) error {
-	return c.SubscribeChanWithContext(context.Background(), req, stream, ch)
+func (c *SSEClient) SubscribeChan(stream string, ch chan *Event) error {
+	return c.SubscribeChanWithContext(context.Background(), stream, ch)
 }
 
 // SubscribeChanWithContext sends all events to the provided channel with context
-func (c *Client) SubscribeChanWithContext(ctx context.Context, req *protocol.Request, stream string, ch chan *Event) error {
+func (c *SSEClient) SubscribeChanWithContext(ctx context.Context, stream string, ch chan *Event) error {
 	var connected bool
 	errch := make(chan error)
 	c.mu.Lock()
@@ -154,7 +152,8 @@ func (c *Client) SubscribeChanWithContext(ctx context.Context, req *protocol.Req
 	c.mu.Unlock()
 
 	operation := func() error {
-		resp, err := c.request(ctx, req, stream)
+		req, resp := protocol.AcquireRequest(), protocol.AcquireResponse()
+		err := c.request(ctx, req, resp, stream)
 		defer func() {
 			protocol.ReleaseRequest(req)
 			protocol.ReleaseResponse(resp)
@@ -225,14 +224,14 @@ func (c *Client) SubscribeChanWithContext(ctx context.Context, req *protocol.Req
 	return err
 }
 
-func (c *Client) startReadLoop(reader *EventStreamReader) (chan *Event, chan error) {
+func (c *SSEClient) startReadLoop(reader *EventStreamReader) (chan *Event, chan error) {
 	outCh := make(chan *Event)
 	erChan := make(chan error)
 	go c.readLoop(reader, outCh, erChan)
 	return outCh, erChan
 }
 
-func (c *Client) readLoop(reader *EventStreamReader, outCh chan *Event, erChan chan error) {
+func (c *SSEClient) readLoop(reader *EventStreamReader, outCh chan *Event, erChan chan error) {
 	for {
 		// Read each new line and process the type of event
 		event, err := reader.ReadEvent()
@@ -242,17 +241,17 @@ func (c *Client) readLoop(reader *EventStreamReader, outCh chan *Event, erChan c
 				return
 			}
 			// run user specified disconnect function
-			if c.disconnectcb != nil {
+			if c.disconnectCallback != nil {
 				c.Connected = false
-				c.disconnectcb(c)
+				c.disconnectCallback(c)
 			}
 			erChan <- err
 			return
 		}
 
-		if !c.Connected && c.connectedcb != nil {
+		if !c.Connected && c.connectedCallback != nil {
 			c.Connected = true
-			c.connectedcb(c)
+			c.connectedCallback(c)
 		}
 
 		// If we get an error, ignore it.
@@ -273,27 +272,27 @@ func (c *Client) readLoop(reader *EventStreamReader, outCh chan *Event, erChan c
 }
 
 // SubscribeRaw to an sse endpoint
-func (c *Client) SubscribeRaw(req *protocol.Request, handler func(msg *Event)) error {
-	return c.Subscribe("", req, handler)
+func (c *SSEClient) SubscribeRaw(handler func(msg *Event)) error {
+	return c.Subscribe("", handler)
 }
 
 // SubscribeRawWithContext to an sse endpoint with context
-func (c *Client) SubscribeRawWithContext(ctx context.Context, req *protocol.Request, handler func(msg *Event)) error {
-	return c.SubscribeWithContext(ctx, req, "", handler)
+func (c *SSEClient) SubscribeRawWithContext(ctx context.Context, handler func(msg *Event)) error {
+	return c.SubscribeWithContext(ctx, "", handler)
 }
 
 // SubscribeChanRaw sends all events to the provided channel
-func (c *Client) SubscribeChanRaw(req *protocol.Request, ch chan *Event) error {
-	return c.SubscribeChan(req, "", ch)
+func (c *SSEClient) SubscribeChanRaw(ch chan *Event) error {
+	return c.SubscribeChan("", ch)
 }
 
 // SubscribeChanRawWithContext sends all events to the provided channel with context
-func (c *Client) SubscribeChanRawWithContext(ctx context.Context, req *protocol.Request, ch chan *Event) error {
-	return c.SubscribeChanWithContext(ctx, req, "", ch)
+func (c *SSEClient) SubscribeChanRawWithContext(ctx context.Context, ch chan *Event) error {
+	return c.SubscribeChanWithContext(ctx, "", ch)
 }
 
 // Unsubscribe unsubscribes a channel
-func (c *Client) Unsubscribe(ch chan *Event) {
+func (c *SSEClient) Unsubscribe(ch chan *Event) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -303,35 +302,27 @@ func (c *Client) Unsubscribe(ch chan *Event) {
 }
 
 // OnDisconnect specifies the function to run when the connection disconnects
-func (c *Client) OnDisconnect(fn ConnCallback) {
-	c.disconnectcb = fn
+func (c *SSEClient) OnDisconnect(fn ConnCallback) {
+	c.disconnectCallback = fn
 }
 
 // OnConnect specifies the function to run when the connection is successful
-func (c *Client) OnConnect(fn ConnCallback) {
-	c.connectedcb = fn
+func (c *SSEClient) OnConnect(fn ConnCallback) {
+	c.connectedCallback = fn
 }
 
-func (c *Client) request(ctx context.Context, req *protocol.Request, stream string) (*protocol.Response, error) {
-	resp := protocol.AcquireResponse()
-	req.SetMethod("GET")
+// SetMaxBufferSize  set sse client MaxBufferSize
+func (c *SSEClient) SetMaxBufferSize(size int) {
+	c.maxBufferSize = size
+}
+
+func (c *SSEClient) request(ctx context.Context, req *protocol.Request, resp *protocol.Response, stream string) error {
+	req.SetMethod(c.Method)
 	req.SetRequestURI(c.URL)
-
-	//req, err := adaptor.GetCompatRequest(hReq)
-	//if err != nil {
-	//	return nil, err
-	//}
-
-	//req, err := http.NewRequest("GET", c.URL, nil)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//req = req.WithContext(ctx)
 
 	// Setup request, specify stream to connect to
 	if stream != "" {
 		req.URI().QueryArgs().Add("stream", stream)
-		// 不确定是否已经加入到原始请求 url 中，有待测试
 	}
 
 	req.Header.Set("Cache-Control", "no-cache")
@@ -340,20 +331,18 @@ func (c *Client) request(ctx context.Context, req *protocol.Request, stream stri
 
 	lastID, exists := c.LastEventID.Load().([]byte)
 	if exists && lastID != nil {
-		req.Header.Set("Last-Event-ID", string(lastID))
+		req.Header.Set(LastEventID, string(lastID))
 	}
-
 	// Add user specified headers
 	for k, v := range c.Headers {
 		req.Header.Set(k, v)
 	}
 
 	err := c.HertzClient.Do(ctx, req, resp)
-	return resp, err
-
+	return err
 }
 
-func (c *Client) processEvent(msg []byte) (event *Event, err error) {
+func (c *SSEClient) processEvent(msg []byte) (event *Event, err error) {
 	var e Event
 
 	if len(msg) < 1 {
@@ -375,7 +364,6 @@ func (c *Client) processEvent(msg []byte) (event *Event, err error) {
 		case bytes.HasPrefix(line, headerEvent):
 			e.Event = string(append([]byte(nil), trimHeader(len(headerEvent), line)...))
 		case bytes.HasPrefix(line, headerRetry):
-			// 这里采用的是大端序
 			e.Retry = binary.BigEndian.Uint64(append([]byte(nil), trimHeader(len(headerRetry), line)...))
 		default:
 			// Ignore any garbage that doesn't match what we're looking for.
@@ -398,7 +386,7 @@ func (c *Client) processEvent(msg []byte) (event *Event, err error) {
 	return &e, err
 }
 
-func (c *Client) cleanup(ch chan *Event) {
+func (c *SSEClient) cleanup(ch chan *Event) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
