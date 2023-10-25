@@ -23,13 +23,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"github.com/cloudwego/hertz/pkg/network/standard"
 	"io"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/cloudwego/hertz/pkg/network/standard"
 
 	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/protocol"
@@ -110,13 +109,11 @@ func (c *SSEClient) SubscribeWithContext(ctx context.Context, stream string, han
 				return err
 			}
 		} else if resp.StatusCode() != 200 {
-			resp.CloseBodyStream()
 			return fmt.Errorf("could not connect to stream: %s", http.StatusText(resp.StatusCode()))
 		}
-		defer resp.CloseBodyStream()
 
 		reader := NewEventStreamReader(resp.BodyStream(), c.maxBufferSize)
-		eventChan, errorChan := c.startReadLoop(reader)
+		eventChan, errorChan := c.startReadLoop(ctx, reader)
 
 		for {
 			select {
@@ -167,10 +164,8 @@ func (c *SSEClient) SubscribeChanWithContext(ctx context.Context, stream string,
 				return err
 			}
 		} else if resp.StatusCode() != 200 {
-			resp.CloseBodyStream()
 			return fmt.Errorf("could not connect to stream: %s", http.StatusText(resp.StatusCode()))
 		}
-		defer resp.CloseBodyStream()
 
 		if !connected {
 			// Notify connect
@@ -179,7 +174,7 @@ func (c *SSEClient) SubscribeChanWithContext(ctx context.Context, stream string,
 		}
 
 		reader := NewEventStreamReader(resp.BodyStream(), c.maxBufferSize)
-		eventChan, errorChan := c.startReadLoop(reader)
+		eventChan, errorChan := c.startReadLoop(ctx, reader)
 
 		for {
 			var msg *Event
@@ -224,15 +219,27 @@ func (c *SSEClient) SubscribeChanWithContext(ctx context.Context, stream string,
 	return err
 }
 
-func (c *SSEClient) startReadLoop(reader *EventStreamReader) (chan *Event, chan error) {
+func (c *SSEClient) startReadLoop(ctx context.Context, reader *EventStreamReader) (chan *Event, chan error) {
 	outCh := make(chan *Event)
 	erChan := make(chan error)
-	go c.readLoop(reader, outCh, erChan)
+	go c.readLoop(ctx, reader, outCh, erChan)
 	return outCh, erChan
 }
 
-func (c *SSEClient) readLoop(reader *EventStreamReader, outCh chan *Event, erChan chan error) {
+func (c *SSEClient) readLoop(ctx context.Context, reader *EventStreamReader, outCh chan *Event, erChan chan error) {
+	var signal int
+	go func() {
+		select {
+		case <-ctx.Done():
+			signal = 1
+			return
+		}
+	}()
 	for {
+		if signal == 1 {
+			erChan <- nil
+			return
+		}
 		// Read each new line and process the type of event
 		event, err := reader.ReadEvent()
 		if err != nil {
@@ -319,7 +326,6 @@ func (c *SSEClient) SetMaxBufferSize(size int) {
 func (c *SSEClient) request(ctx context.Context, req *protocol.Request, resp *protocol.Response, stream string) error {
 	req.SetMethod(c.Method)
 	req.SetRequestURI(c.URL)
-
 	// Setup request, specify stream to connect to
 	if stream != "" {
 		req.URI().QueryArgs().Add("stream", stream)
