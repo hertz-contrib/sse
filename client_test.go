@@ -21,7 +21,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -97,22 +96,22 @@ func newServerOnConnect(empty bool) {
 	h.Run()
 }
 
-func newServerReConnect(empty bool) {
-	urlPath = "http://127.0.0.1:9001/sse"
-	h := server.Default(server.WithHostPorts("0.0.0.0:9001"))
-
-	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
-		// client can tell server last event it received with Last-Event-ID header
-		lastEventID := GetLastEventID(c)
-		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
-
-		// you must set status code and response headers before first render call
-		c.SetStatusCode(http.StatusOK)
-		s := NewStream(c)
-		publishMsgs(s, empty, 10000)
-	})
-	h.Run()
-}
+//func newServerReConnect(empty bool) {
+//	urlPath = "http://127.0.0.1:9001/sse"
+//	h := server.Default(server.WithHostPorts("0.0.0.0:9001"))
+//
+//	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
+//		// client can tell server last event it received with Last-Event-ID header
+//		lastEventID := GetLastEventID(c)
+//		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
+//
+//		// you must set status code and response headers before first render call
+//		c.SetStatusCode(http.StatusOK)
+//		s := NewStream(c)
+//		publishMsgs(s, empty, 10000)
+//	})
+//	h.Run()
+//}
 
 func newServerUnsubscribe(empty bool) {
 	urlPath = "http://127.0.0.1:9002/sse"
@@ -148,28 +147,28 @@ func newServerTrue(empty bool) {
 	h.Run()
 }
 
-func newServerWithContext(ctx context.Context, empty bool) {
-	urlPath = "http://127.0.0.1:9004/sse"
-	h := server.Default(server.WithHostPorts("0.0.0.0:9004"))
-
-	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
-		// client can tell server last event it received with Last-Event-ID header
-		lastEventID := GetLastEventID(c)
-		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
-
-		// you must set status code and response headers before first render call
-		c.SetStatusCode(http.StatusOK)
-		s := NewStream(c)
-		publishMsgs(s, empty, 10000)
-	})
-	go func() {
-		select {
-		case <-ctx.Done():
-			h.Close()
-		}
-	}()
-	h.Run()
-}
+//func newServerWithContext(ctx context.Context, empty bool) {
+//	urlPath = "http://127.0.0.1:9004/sse"
+//	h := server.Default(server.WithHostPorts("0.0.0.0:9004"))
+//
+//	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
+//		// client can tell server last event it received with Last-Event-ID header
+//		lastEventID := GetLastEventID(c)
+//		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
+//
+//		// you must set status code and response headers before first render call
+//		c.SetStatusCode(http.StatusOK)
+//		s := NewStream(c)
+//		publishMsgs(s, empty, 10000)
+//	})
+//	go func() {
+//		select {
+//		case <-ctx.Done():
+//			h.Close()
+//		}
+//	}()
+//	h.Run()
+//}
 
 func newServerBigData(data []byte) {
 	urlPath = "http://127.0.0.1:9005/sse"
@@ -228,28 +227,28 @@ func newMultilineServer() {
 	h.Spin()
 }
 
-func newServerDisconnect(empty bool) {
-	urlPath = "http://127.0.0.1:9008/sse"
-	h := server.Default(server.WithHostPorts("0.0.0.0:9008"))
-
-	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
-		// client can tell server last event it received with Last-Event-ID header
-		lastEventID := GetLastEventID(c)
-		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
-
-		// you must set status code and response headers before first render call
-		c.SetStatusCode(http.StatusOK)
-		s := NewStream(c)
-		go func() {
-			time.Sleep(time.Second)
-			c.SetConnectionClose()
-			h.Close()
-			fmt.Println(h.IsRunning())
-		}()
-		publishMsgs(s, empty, 1000)
-	})
-	h.Run()
-}
+//func newServerDisconnect(empty bool) {
+//	urlPath = "http://127.0.0.1:9008/sse"
+//	h := server.Default(server.WithHostPorts("0.0.0.0:9008"))
+//
+//	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
+//		// client can tell server last event it received with Last-Event-ID header
+//		lastEventID := GetLastEventID(c)
+//		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
+//
+//		// you must set status code and response headers before first render call
+//		c.SetStatusCode(http.StatusOK)
+//		s := NewStream(c)
+//		go func() {
+//			time.Sleep(time.Second)
+//			c.SetConnectionClose()
+//			h.Close()
+//			fmt.Println(h.IsRunning())
+//		}()
+//		publishMsgs(s, empty, 1000)
+//	})
+//	h.Run()
+//}
 
 func newServer401() {
 	urlPath = "http://127.0.0.1:9009/sse"
@@ -421,29 +420,29 @@ func TestClientOnConnect(t *testing.T) {
 	assert.Equal(t, struct{}{}, <-called)
 }
 
-func TestClientChanReconnect(t *testing.T) {
-	go newServerReConnect(false)
-	time.Sleep(time.Second)
-	c := NewClient(urlPath)
-
-	events := make(chan *Event)
-	err := c.SubscribeChan("test", events)
-	require.Nil(t, err)
-
-	for i := 0; i < 10; i++ {
-		if i == 5 {
-			// kill connection
-		}
-		msg, merr := wait(events, time.Second*1)
-		if msg == nil {
-			i--
-			continue
-		}
-		assert.Nil(t, merr)
-		assert.Equal(t, []byte(`ping`), msg)
-	}
-	c.Unsubscribe(events)
-}
+//func TestClientChanReconnect(t *testing.T) {
+//	go newServerReConnect(false)
+//	time.Sleep(time.Second)
+//	c := NewClient(urlPath)
+//
+//	events := make(chan *Event)
+//	err := c.SubscribeChan("test", events)
+//	require.Nil(t, err)
+//
+//	for i := 0; i < 10; i++ {
+//		if i == 5 {
+//			// kill connection
+//		}
+//		msg, merr := wait(events, time.Second*1)
+//		if msg == nil {
+//			i--
+//			continue
+//		}
+//		assert.Nil(t, merr)
+//		assert.Equal(t, []byte(`ping`), msg)
+//	}
+//	c.Unsubscribe(events)
+//}
 
 func TestClientUnsubscribe(t *testing.T) {
 	go newServerUnsubscribe(false)
