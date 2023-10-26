@@ -230,11 +230,9 @@ func (c *SSEClient) startReadLoop(ctx context.Context, reader *EventStreamReader
 func (c *SSEClient) readLoop(ctx context.Context, reader *EventStreamReader, outCh chan *Event, erChan chan error) {
 	var signal int
 	go func() {
-		select {
-		case <-ctx.Done():
-			signal = 1
-			return
-		}
+		<-ctx.Done()
+		signal = 1
+		return
 	}()
 	for {
 		if signal == 1 {
