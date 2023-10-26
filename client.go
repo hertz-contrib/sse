@@ -23,12 +23,13 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/cloudwego/hertz/pkg/network/standard"
 	"io"
 	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/cloudwego/hertz/pkg/network/standard"
 
 	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/protocol"

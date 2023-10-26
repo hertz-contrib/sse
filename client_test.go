@@ -22,15 +22,16 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/cloudwego/hertz/pkg/common/hlog"
-	"gopkg.in/cenkalti/backoff.v1"
 	"net/http"
 	_ "net/http/pprof"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/cloudwego/hertz/pkg/common/hlog"
+	"gopkg.in/cenkalti/backoff.v1"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,9 +51,11 @@ var mldata = `{
 func setup(empty bool) {
 	go newServer(empty)
 }
+
 func setupWithContext(ctx context.Context, empty bool) {
 	go newServerWithContext(ctx, empty)
 }
+
 func setupMultiline() {
 	go newMultilineServer()
 }
@@ -66,7 +69,6 @@ func setupDisconnect(empty bool) {
 }
 
 func newServer(empty bool) {
-
 	h := server.Default()
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
@@ -81,8 +83,8 @@ func newServer(empty bool) {
 	})
 	h.Run()
 }
-func newServerWithContext(ctx context.Context, empty bool) {
 
+func newServerWithContext(ctx context.Context, empty bool) {
 	h := server.Default()
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
@@ -110,8 +112,8 @@ func newServerWithContext(ctx context.Context, empty bool) {
 		panic(err)
 	}
 }
-func newServerBigData(data []byte) {
 
+func newServerBigData(data []byte) {
 	h := server.Default()
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
@@ -132,7 +134,6 @@ func newServerBigData(data []byte) {
 }
 
 func newServerCount(empty bool, count int) {
-
 	h := server.Default()
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
@@ -150,7 +151,6 @@ func newServerCount(empty bool, count int) {
 }
 
 func newMultilineServer() {
-
 	h := server.Default()
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
@@ -168,7 +168,6 @@ func newMultilineServer() {
 }
 
 func newServerDisconnect(empty bool) {
-
 	h := server.Default()
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
@@ -189,6 +188,7 @@ func newServerDisconnect(empty bool) {
 	})
 	h.Run()
 }
+
 func newServer401() {
 	h := server.Default()
 
@@ -356,7 +356,6 @@ func TestClientOnConnect(t *testing.T) {
 
 	time.Sleep(time.Second)
 	assert.Equal(t, struct{}{}, <-called)
-
 }
 
 func TestClientChanReconnect(t *testing.T) {
@@ -414,7 +413,7 @@ func TestClientUnsubscribeNonBlock(t *testing.T) {
 		assert.Nil(t, merr)
 		assert.Equal(t, []byte(`ping`), msg)
 	}
-	//No more data is available to be read in the channel
+	// No more data is available to be read in the channel
 	// Make sure Unsubscribe returns quickly
 	doneCh := make(chan *Event)
 	go func() {
@@ -501,7 +500,7 @@ func TestSubscribeWithContextDone(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	setupWithContext(ctx, false)
 	time.Sleep(2 * time.Second)
-	var n1 = runtime.NumGoroutine()
+	n1 := runtime.NumGoroutine()
 	c := NewClient(urlPath)
 	for i := 0; i < 10; i++ {
 		go c.SubscribeWithContext(ctx, "test", func(msg *Event) {})
@@ -510,6 +509,6 @@ func TestSubscribeWithContextDone(t *testing.T) {
 	cancel()
 	c.HertzClient.CloseIdleConnections()
 	time.Sleep(1 * time.Second)
-	var n2 = runtime.NumGoroutine()
+	n2 := runtime.NumGoroutine()
 	assert.Equal(t, n1+1, n2) // protocol.refreshServerDate() creates an goroutine to refreshServerDate that can not be canceled
 }
