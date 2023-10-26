@@ -232,7 +232,6 @@ func (c *SSEClient) readLoop(ctx context.Context, reader *EventStreamReader, out
 	go func() {
 		<-ctx.Done()
 		signal = 1
-		return
 	}()
 	for {
 		if signal == 1 {
