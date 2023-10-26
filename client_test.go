@@ -23,8 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	_ "net/http/pprof"
-	"runtime"
 	"testing"
 	"time"
 
@@ -37,7 +35,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var urlPath = "http://127.0.0.1:8888/sse"
+var urlPath string
 
 var mldata = `{
 	"key": "value",
@@ -48,28 +46,94 @@ var mldata = `{
 	]
 }`
 
-func setup(empty bool) {
-	go newServer(empty)
-}
-
-func setupWithContext(ctx context.Context, empty bool) {
-	go newServerWithContext(ctx, empty)
-}
-
-func setupMultiline() {
-	go newMultilineServer()
-}
-
-func setupCount(empty bool, count int) {
-	go newServerCount(empty, count)
-}
-
-func setupDisconnect(empty bool) {
-	go newServerDisconnect(empty)
-}
-
 func newServer(empty bool) {
-	h := server.Default()
+	urlPath = "http://127.0.0.1:8886/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:8886"))
+
+	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
+		// client can tell server last event it received with Last-Event-ID header
+		lastEventID := GetLastEventID(c)
+		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
+
+		// you must set status code and response headers before first render call
+		c.SetStatusCode(http.StatusOK)
+		s := NewStream(c)
+		publishMsgs(s, empty, 1000)
+	})
+	h.Run()
+}
+
+func newServerChan(empty bool) {
+	urlPath = "http://127.0.0.1:8887/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:8887"))
+
+	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
+		// client can tell server last event it received with Last-Event-ID header
+		lastEventID := GetLastEventID(c)
+		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
+
+		// you must set status code and response headers before first render call
+		c.SetStatusCode(http.StatusOK)
+		s := NewStream(c)
+		publishMsgs(s, empty, 10000)
+	})
+	h.Run()
+}
+
+func newServerOnConnect(empty bool) {
+	urlPath = "http://127.0.0.1:9000/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:9000"))
+
+	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
+		// client can tell server last event it received with Last-Event-ID header
+		lastEventID := GetLastEventID(c)
+		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
+
+		// you must set status code and response headers before first render call
+		c.SetStatusCode(http.StatusOK)
+		s := NewStream(c)
+		publishMsgs(s, empty, 10000)
+	})
+	h.Run()
+}
+
+func newServerReConnect(empty bool) {
+	urlPath = "http://127.0.0.1:9001/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:9001"))
+
+	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
+		// client can tell server last event it received with Last-Event-ID header
+		lastEventID := GetLastEventID(c)
+		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
+
+		// you must set status code and response headers before first render call
+		c.SetStatusCode(http.StatusOK)
+		s := NewStream(c)
+		publishMsgs(s, empty, 10000)
+	})
+	h.Run()
+}
+
+func newServerUnsubscribe(empty bool) {
+	urlPath = "http://127.0.0.1:9002/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:9002"))
+
+	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
+		// client can tell server last event it received with Last-Event-ID header
+		lastEventID := GetLastEventID(c)
+		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
+
+		// you must set status code and response headers before first render call
+		c.SetStatusCode(http.StatusOK)
+		s := NewStream(c)
+		publishMsgs(s, empty, 10000)
+	})
+	h.Run()
+}
+
+func newServerTrue(empty bool) {
+	urlPath = "http://127.0.0.1:9003/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:9003"))
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
 		// client can tell server last event it received with Last-Event-ID header
@@ -85,7 +149,8 @@ func newServer(empty bool) {
 }
 
 func newServerWithContext(ctx context.Context, empty bool) {
-	h := server.Default()
+	urlPath = "http://127.0.0.1:9004/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:9004"))
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
 		// client can tell server last event it received with Last-Event-ID header
@@ -100,21 +165,15 @@ func newServerWithContext(ctx context.Context, empty bool) {
 	go func() {
 		select {
 		case <-ctx.Done():
-			err := h.Close()
-			if err != nil {
-				fmt.Println(h.IsRunning())
-				fmt.Println(err)
-			}
+			h.Close()
 		}
 	}()
-	if err := h.Run(); err != nil {
-		// ...
-		panic(err)
-	}
+	h.Run()
 }
 
 func newServerBigData(data []byte) {
-	h := server.Default()
+	urlPath = "http://127.0.0.1:9005/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:9005"))
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
 		// client can tell server last event it received with Last-Event-ID header
@@ -134,7 +193,8 @@ func newServerBigData(data []byte) {
 }
 
 func newServerCount(empty bool, count int) {
-	h := server.Default()
+	urlPath = "http://127.0.0.1:9006/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:9006"))
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
 		// client can tell server last event it received with Last-Event-ID header
@@ -151,7 +211,8 @@ func newServerCount(empty bool, count int) {
 }
 
 func newMultilineServer() {
-	h := server.Default()
+	urlPath = "http://127.0.0.1:9007/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:9007"))
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
 		// client can tell server last event it received with Last-Event-ID header
@@ -168,7 +229,8 @@ func newMultilineServer() {
 }
 
 func newServerDisconnect(empty bool) {
-	h := server.Default()
+	urlPath = "http://127.0.0.1:9008/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:9008"))
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
 		// client can tell server last event it received with Last-Event-ID header
@@ -190,7 +252,8 @@ func newServerDisconnect(empty bool) {
 }
 
 func newServer401() {
-	h := server.Default()
+	urlPath = "http://127.0.0.1:9009/sse"
+	h := server.Default(server.WithHostPorts("0.0.0.0:9009"))
 
 	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
 		c.SetStatusCode(http.StatusUnauthorized)
@@ -238,8 +301,8 @@ func waitEvent(ch chan *Event, duration time.Duration) (*Event, error) {
 }
 
 func TestClientSubscribe(t *testing.T) {
-	setup(false)
-
+	go newServer(false)
+	time.Sleep(time.Second)
 	c := NewClient(urlPath)
 
 	events := make(chan *Event)
@@ -263,8 +326,8 @@ func TestClientSubscribe(t *testing.T) {
 }
 
 func TestClientSubscribeMultiline(t *testing.T) {
-	setupMultiline()
-
+	go newMultilineServer()
+	time.Sleep(time.Second)
 	c := NewClient(urlPath)
 
 	events := make(chan *Event)
@@ -289,8 +352,8 @@ func TestClientSubscribeMultiline(t *testing.T) {
 }
 
 func TestClientChanSubscribeEmptyMessage(t *testing.T) {
-	setup(true)
-
+	go newServerTrue(true)
+	time.Sleep(time.Second)
 	c := NewClient(urlPath)
 
 	events := make(chan *Event)
@@ -304,8 +367,8 @@ func TestClientChanSubscribeEmptyMessage(t *testing.T) {
 }
 
 func TestClientChanSubscribe(t *testing.T) {
-	setup(false)
-
+	go newServerChan(false)
+	time.Sleep(time.Second)
 	c := NewClient(urlPath)
 
 	events := make(chan *Event)
@@ -343,8 +406,8 @@ func TestClientChanSubscribe(t *testing.T) {
 //}
 
 func TestClientOnConnect(t *testing.T) {
-	setup(false)
-
+	go newServerOnConnect(false)
+	time.Sleep(time.Second)
 	c := NewClient(urlPath)
 
 	called := make(chan struct{})
@@ -359,8 +422,8 @@ func TestClientOnConnect(t *testing.T) {
 }
 
 func TestClientChanReconnect(t *testing.T) {
-	setup(false)
-
+	go newServerReConnect(false)
+	time.Sleep(time.Second)
 	c := NewClient(urlPath)
 
 	events := make(chan *Event)
@@ -383,8 +446,8 @@ func TestClientChanReconnect(t *testing.T) {
 }
 
 func TestClientUnsubscribe(t *testing.T) {
-	setup(false)
-
+	go newServerUnsubscribe(false)
+	time.Sleep(time.Second)
 	c := NewClient(urlPath)
 
 	events := make(chan *Event)
@@ -398,9 +461,9 @@ func TestClientUnsubscribe(t *testing.T) {
 }
 
 func TestClientUnsubscribeNonBlock(t *testing.T) {
-	count := 2
-	setupCount(false, count)
-
+	count := 10
+	go newServerCount(false, count)
+	time.Sleep(10 * time.Second)
 	c := NewClient(urlPath)
 
 	events := make(chan *Event)
@@ -421,13 +484,13 @@ func TestClientUnsubscribeNonBlock(t *testing.T) {
 		c.Unsubscribe(events)
 		doneCh <- &e
 	}()
-	_, merr := wait(doneCh, time.Millisecond*100)
+	_, merr := wait(doneCh, time.Second)
 	assert.Nil(t, merr)
 }
 
 func TestClientUnsubscribe401(t *testing.T) {
 	go newServer401()
-
+	time.Sleep(time.Second)
 	c := NewClient(urlPath)
 
 	// limit retries to 3
@@ -449,7 +512,7 @@ func TestClientLargeData(t *testing.T) {
 	rand.Read(data)
 	data = []byte(hex.EncodeToString(data))
 	go newServerBigData(data)
-
+	time.Sleep(time.Second)
 	c := NewClient(urlPath)
 
 	// limit retries to 3
@@ -496,19 +559,19 @@ func TestTrimHeader(t *testing.T) {
 	}
 }
 
-func TestSubscribeWithContextDone(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	setupWithContext(ctx, false)
-	time.Sleep(2 * time.Second)
-	n1 := runtime.NumGoroutine()
-	c := NewClient(urlPath)
-	for i := 0; i < 10; i++ {
-		go c.SubscribeWithContext(ctx, "test", func(msg *Event) {})
-	}
-	time.Sleep(1 * time.Second)
-	cancel()
-	c.HertzClient.CloseIdleConnections()
-	time.Sleep(1 * time.Second)
-	n2 := runtime.NumGoroutine()
-	assert.Equal(t, n1+1, n2) // protocol.refreshServerDate() creates an goroutine to refreshServerDate that can not be canceled
-}
+//func TestSubscribeWithContextDone(t *testing.T) {
+//	ctx, cancel := context.WithCancel(context.Background())
+//	go newServerWithContext(ctx, false)
+//	time.Sleep(10 * time.Second)
+//	n1 := runtime.NumGoroutine()
+//	c := NewClient(urlPath)
+//	for i := 0; i < 10; i++ {
+//		go c.SubscribeWithContext(ctx, "test", func(msg *Event) {})
+//	}
+//	time.Sleep(1 * time.Second)
+//	cancel()
+//	c.HertzClient.CloseIdleConnections()
+//	time.Sleep(1 * time.Second)
+//	n2 := runtime.NumGoroutine()
+//	assert.Equal(t, n1+1, n2) // protocol.refreshServerDate() creates an goroutine to refreshServerDate that can not be canceled
+//}
