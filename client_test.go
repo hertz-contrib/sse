@@ -25,13 +25,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-	"gopkg.in/cenkalti/backoff.v1"
-
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
-	"github.com/stretchr/testify/require"
+	"github.com/cloudwego/hertz/pkg/common/test/assert"
 )
 
 var mldata = `{
@@ -112,22 +109,6 @@ func newMultilineServer(port string) {
 	h.Spin()
 }
 
-//func newServerDisconnect(empty bool, port string) {
-//	h := server.Default(server.WithHostPorts("0.0.0.0:" + port))
-//
-//	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
-//		// client can tell server last event it received with Last-Event-ID header
-//		lastEventID := GetLastEventID(c)
-//		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
-//
-//		// you must set status code and response headers before first render call
-//		c.SetStatusCode(http.StatusOK)
-//		s := NewStream(c)
-//		publishMsgs(s, empty, 1000)
-//	})
-//	h.Run()
-//}
-
 func newServer401(port string) {
 	h := server.Default(server.WithHostPorts("0.0.0.0:" + port))
 
@@ -185,8 +166,8 @@ func TestClientSubscribe(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		msg, err := wait(events, time.Second*1)
-		require.Nil(t, err)
-		assert.Equal(t, []byte(`ping`), msg)
+		assert.Nil(t, err)
+		assert.DeepEqual(t, []byte(`ping`), msg)
 	}
 
 	assert.Nil(t, cErr)
@@ -211,34 +192,12 @@ func TestClientSubscribeMultiline(t *testing.T) {
 
 	for i := 0; i < 5; i++ {
 		msg, err := wait(events, time.Second*1)
-		require.Nil(t, err)
-		assert.Equal(t, []byte(mldata), msg)
+		assert.Nil(t, err)
+		assert.DeepEqual(t, []byte(mldata), msg)
 	}
 
 	assert.Nil(t, cErr)
 }
-
-//func TestClientOnDisconnect(t *testing.T) {
-//	go newServerDisconnect(false, "9008")
-//
-//	c := NewClient("http://127.0.0.1:9008/sse")
-//
-//	called := make(chan struct{})
-//	c.OnDisconnect(func(client *SSEClient) {
-//		called <- struct{}{}
-//	})
-//	file, _ := os.Open("data.txt") // 打开要扫描的文件
-//	defer file.Close()
-//
-//	scanner := bufio.NewScanner(file) // 创建 Scanner 实例
-//	go c.startReadLoop(context.Background(), &EventStreamReader{scanner})
-//
-//	time.Sleep(time.Second)
-//	// c.HertzClient.CloseIdleConnections()
-//	// server.CloseClientConnections()
-//
-//	assert.Equal(t, struct{}{}, <-called)
-//}
 
 func TestClientOnConnect(t *testing.T) {
 	go newServerOnConnect(false, "9000")
@@ -246,14 +205,14 @@ func TestClientOnConnect(t *testing.T) {
 	c := NewClient("http://127.0.0.1:9000/sse")
 
 	called := make(chan struct{})
-	c.OnConnect(func(client *SSEClient) {
+	c.OnConnect(func(ctx context.Context, client *Client) {
 		called <- struct{}{}
 	})
 
 	go c.Subscribe("test", func(msg *Event) {})
 
 	time.Sleep(time.Second)
-	assert.Equal(t, struct{}{}, <-called)
+	assert.DeepEqual(t, struct{}{}, <-called)
 }
 
 func TestClientUnsubscribe401(t *testing.T) {
@@ -261,18 +220,12 @@ func TestClientUnsubscribe401(t *testing.T) {
 	time.Sleep(time.Second)
 	c := NewClient("http://127.0.0.1:9009/sse")
 
-	// limit retries to 3
-	c.ReconnectStrategy = backoff.WithMaxTries(
-		backoff.NewExponentialBackOff(),
-		3,
-	)
-
 	err := c.SubscribeRaw(func(ev *Event) {
 		// this shouldn't run
 		assert.False(t, true)
 	})
 
-	require.NotNil(t, err)
+	assert.NotNil(t, err)
 }
 
 func TestClientLargeData(t *testing.T) {
@@ -284,10 +237,6 @@ func TestClientLargeData(t *testing.T) {
 	c := NewClient("http://127.0.0.1:9005/sse")
 
 	// limit retries to 3
-	c.ReconnectStrategy = backoff.WithMaxTries(
-		backoff.NewExponentialBackOff(),
-		3,
-	)
 
 	ec := make(chan *Event, 1)
 
@@ -298,8 +247,8 @@ func TestClientLargeData(t *testing.T) {
 	}()
 
 	d, err := wait(ec, time.Second)
-	require.Nil(t, err)
-	require.Equal(t, data, d)
+	assert.Nil(t, err)
+	assert.DeepEqual(t, data, d)
 }
 
 func TestTrimHeader(t *testing.T) {
@@ -323,6 +272,6 @@ func TestTrimHeader(t *testing.T) {
 
 	for _, tc := range tests {
 		got := trimHeader(len(headerData), tc.input)
-		require.Equal(t, tc.want, got)
+		assert.DeepEqual(t, tc.want, got)
 	}
 }

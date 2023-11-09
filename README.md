@@ -6,7 +6,7 @@ Server-Sent events is a specification for implementing server-side-push for web 
 HTTP.
 The Server-Sent Events EventSource API is standardized as part
 of [HTML5[1] by the W3C](https://html.spec.whatwg.org/multipage/server-sent-events.html#server-sent-events).
-This repository is a fork of [manucorporat/sse](https://github.com/manucorporat/sse) for Hertz.
+This repository is a fork of [manucorporat/sse](https://github.com/manucorporat/sse) and [r3labs/sse](https://github.com/r3labs/sse/) for Hertz.
 
 - [Using server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events    )
 - [Stream Updates with Server-Sent Events](http://www.html5rocks.com/en/tutorials/eventsource/basics/)
