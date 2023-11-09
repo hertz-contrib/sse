@@ -25,7 +25,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -57,7 +56,6 @@ type SSEClient struct {
 	ReconnectStrategy  backoff.BackOff
 	disconnectCallback ConnCallback
 	connectedCallback  ConnCallback
-	subscribed         map[chan *Event]chan struct{}
 	ReconnectNotify    backoff.Notify
 	ResponseValidator  ResponseValidator
 	HertzClient        *client.Client
@@ -66,7 +64,6 @@ type SSEClient struct {
 	Method             string
 	LastEventID        atomic.Value // []byte
 	maxBufferSize      int
-	mu                 sync.Mutex
 	EncodingBase64     bool
 	Connected          bool
 }
@@ -79,7 +76,6 @@ func NewClient(url string) *SSEClient {
 		URL:           url,
 		HertzClient:   defaultClient,
 		Headers:       make(map[string]string),
-		subscribed:    make(map[chan *Event]chan struct{}),
 		maxBufferSize: 1 << 16,
 		Method:        consts.MethodGet,
 	}
@@ -97,13 +93,13 @@ func (c *SSEClient) SubscribeWithContext(ctx context.Context, stream string, han
 	operation := func() error {
 		req, resp := protocol.AcquireRequest(), protocol.AcquireResponse()
 		err := c.request(ctx, req, resp, stream)
+		if err != nil {
+			return err
+		}
 		defer func() {
 			protocol.ReleaseRequest(req)
 			protocol.ReleaseResponse(resp)
 		}()
-		if err != nil {
-			return err
-		}
 		if validator := c.ResponseValidator; validator != nil {
 			err = validator(c, resp)
 			if err != nil {
@@ -136,90 +132,6 @@ func (c *SSEClient) SubscribeWithContext(ctx context.Context, stream string, han
 	return err
 }
 
-// SubscribeChan sends all events to the provided channel
-func (c *SSEClient) SubscribeChan(stream string, ch chan *Event) error {
-	return c.SubscribeChanWithContext(context.Background(), stream, ch)
-}
-
-// SubscribeChanWithContext sends all events to the provided channel with context
-func (c *SSEClient) SubscribeChanWithContext(ctx context.Context, stream string, ch chan *Event) error {
-	var connected bool
-	errch := make(chan error)
-	c.mu.Lock()
-	c.subscribed[ch] = make(chan struct{})
-	c.mu.Unlock()
-
-	operation := func() error {
-		req, resp := protocol.AcquireRequest(), protocol.AcquireResponse()
-		err := c.request(ctx, req, resp, stream)
-		defer func() {
-			protocol.ReleaseRequest(req)
-			protocol.ReleaseResponse(resp)
-		}()
-		if err != nil {
-			return err
-		}
-		if validator := c.ResponseValidator; validator != nil {
-			err = validator(c, resp)
-			if err != nil {
-				return err
-			}
-		} else if resp.StatusCode() != 200 {
-			return fmt.Errorf("could not connect to stream: %s", http.StatusText(resp.StatusCode()))
-		}
-
-		if !connected {
-			// Notify connect
-			errch <- nil
-			connected = true
-		}
-
-		reader := NewEventStreamReader(resp.BodyStream(), c.maxBufferSize)
-		eventChan, errorChan := c.startReadLoop(ctx, reader)
-
-		for {
-			var msg *Event
-			// Wait for message to arrive or exit
-			select {
-			case <-c.subscribed[ch]:
-				return nil
-			case err = <-errorChan:
-				return err
-			case msg = <-eventChan:
-			}
-
-			// Wait for message to be sent or exit
-			if msg != nil {
-				select {
-				case <-c.subscribed[ch]:
-					return nil
-				case ch <- msg:
-					// message sent
-				}
-			}
-		}
-	}
-
-	go func() {
-		defer c.cleanup(ch)
-		// Apply user specified reconnection strategy or default to standard NewExponentialBackOff() reconnection method
-		var err error
-		if c.ReconnectStrategy != nil {
-			err = backoff.RetryNotify(operation, c.ReconnectStrategy, c.ReconnectNotify)
-		} else {
-			err = backoff.RetryNotify(operation, backoff.NewExponentialBackOff(), c.ReconnectNotify)
-		}
-
-		// channel closed once connected
-		if err != nil && !connected {
-			errch <- err
-		}
-	}()
-	err := <-errch
-	close(errch)
-	return err
-}
-
 func (c *SSEClient) startReadLoop(ctx context.Context, reader *EventStreamReader) (chan *Event, chan error) {
 	outCh := make(chan *Event)
 	erChan := make(chan error)
@@ -228,16 +140,7 @@ func (c *SSEClient) startReadLoop(ctx context.Context, reader *EventStreamReader
 }
 
 func (c *SSEClient) readLoop(ctx context.Context, reader *EventStreamReader, outCh chan *Event, erChan chan error) {
-	var signal int
-	go func() {
-		<-ctx.Done()
-		signal = 1
-	}()
 	for {
-		if signal == 1 {
-			erChan <- nil
-			return
-		}
 		// Read each new line and process the type of event
 		event, err := reader.ReadEvent()
 		if err != nil {
@@ -284,26 +187,6 @@ func (c *SSEClient) SubscribeRaw(handler func(msg *Event)) error {
 // SubscribeRawWithContext to an sse endpoint with context
 func (c *SSEClient) SubscribeRawWithContext(ctx context.Context, handler func(msg *Event)) error {
 	return c.SubscribeWithContext(ctx, "", handler)
-}
-
-// SubscribeChanRaw sends all events to the provided channel
-func (c *SSEClient) SubscribeChanRaw(ch chan *Event) error {
-	return c.SubscribeChan("", ch)
-}
-
-// SubscribeChanRawWithContext sends all events to the provided channel with context
-func (c *SSEClient) SubscribeChanRawWithContext(ctx context.Context, ch chan *Event) error {
-	return c.SubscribeChanWithContext(ctx, "", ch)
-}
-
-// Unsubscribe unsubscribes a channel
-func (c *SSEClient) Unsubscribe(ch chan *Event) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.subscribed[ch] != nil {
-		c.subscribed[ch] <- struct{}{}
-	}
 }
 
 // OnDisconnect specifies the function to run when the connection disconnects
@@ -388,16 +271,6 @@ func (c *SSEClient) processEvent(msg []byte) (event *Event, err error) {
 		e.Data = buf[:n]
 	}
 	return &e, err
-}
-
-func (c *SSEClient) cleanup(ch chan *Event) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.subscribed[ch] != nil {
-		close(c.subscribed[ch])
-		delete(c.subscribed, ch)
-	}
 }
 
 func trimHeader(size int, data []byte) []byte {

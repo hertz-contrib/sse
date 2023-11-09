@@ -40,7 +40,6 @@ package sse
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"io"
 )
 
@@ -63,7 +62,6 @@ func NewEventStreamReader(eventStream io.Reader, maxBufferSize int) *EventStream
 		if atEOF && len(data) == 0 {
 			return 0, nil, nil
 		}
-
 		// We have a full event payload to parse.
 		if i, nlen := containsDoubleNewline(data); i >= 0 {
 			return i + nlen, data[0:i], nil
@@ -127,9 +125,6 @@ func (e *EventStreamReader) ReadEvent() ([]byte, error) {
 		return event, nil
 	}
 	if err := e.scanner.Err(); err != nil {
-		if err == context.Canceled {
-			return nil, io.EOF
-		}
 		return nil, err
 	}
 	return nil, io.EOF
