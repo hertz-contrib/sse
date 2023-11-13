@@ -103,7 +103,10 @@ func main() {
 		c.SetStatusCode(http.StatusOK)
 		stream := sse.NewStream(c)
 		for event := range clientChan {
-			_ = stream.Publish(&event)
+			err := stream.Publish(&event)
+			if err != nil {
+				return
+			}
 		}
 	})
 
@@ -159,6 +162,7 @@ func (srv *Server) serveHTTP() app.HandlerFunc {
 
 		defer func() {
 			// Send closed connection to event server
+			<-clientChan
 			srv.ClosedClients <- clientChan
 		}()
 
