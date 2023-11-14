@@ -2,6 +2,8 @@
 
 (This is a community driven project)
 
+English ｜ [中文](README_CN.md)
+
 Server-Sent events is a specification for implementing server-side-push for web frontend applications, through plain-old
 HTTP.
 The Server-Sent Events EventSource API is standardized as part
@@ -80,7 +82,7 @@ Also see:
 
 This repository comes with two examples to demonstrate how to build realtime applications with server-sent event.
 
-### Stock Price (examples/stockprice)
+### Stock Price (examples/server/stockprice)
 
 A web server that push (randomly generated) stock price periodically.
 
@@ -108,12 +110,12 @@ curl -N --location 'localhost:8888/price'
 
 ```
 
-### Chat Server (examples/chat)
+### Chat Server (examples/server/chat)
 
-- A chat server that push new messages to clients using server-sent events. It supports both direct and broadcast
+A chat server that push new messages to clients using server-sent events. It supports both direct and broadcast
   messaging.
 
-1. Run `exmaples/chat/main.go` to start server.
+1. Run `examples/chat/main.go` to start server.
 2. Send a get request to `/chat/sse`.
 
 ```bash
