@@ -13,7 +13,70 @@ This repository is a fork of [manucorporat/sse](https://github.com/manucorporat/
 - [Using server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events    )
 - [Stream Updates with Server-Sent Events](http://www.html5rocks.com/en/tutorials/eventsource/basics/)
 
+## Install
+
+```
+go get github.com/hertz-contrib/sse
+```
+## Server
+
+### Headers
+
+The following headers are set when `sse.NewStream` is called:
+
+- ContentType: text/event-stream (always)
+- Cache-Control: no-cache (if not set)
+
+It's recommended to set `X-Accel-Buffering: no` if there is any proxy sitting between server and client.
+
+Also see:
+
+- [Server Sent Events are still not production ready after a decade. A lesson for me, a warning for you!](https://dev.to/miketalbot/server-sent-events-are-still-not-production-ready-after-a-decade-a-lesson-for-me-a-warning-for-you-2gie)
+- [For Server-Sent Events (SSE) what Nginx proxy configuration is appropriate?](https://serverfault.com/questions/801628/for-server-sent-events-sse-what-nginx-proxy-configuration-is-appropriate)
+
+### GetLastEventID
+
+`func GetLastEventID(c *app.RequestContext) string`
+
+GetLastEventID retrieve Last-Event-ID header if present
+
+### Publish
+
+`func (c *Stream) Publish(event *Event) error`
+
+Event struct：
+```go
+type Event struct {
+	Event string
+	ID    string
+	Retry uint64
+	Data  []byte
+}
+```
+
+`Publish` push an event to client.
+
+## Client
+
+### NewClient
+
+`func NewClient(url string) *Client`
+
+Pass in the server-side URL to complete the initialization of the client. The default setting of `maxBufferSize` is 1 << 16, and the `Method` request method is `GET`
+
+You can set Client.Onconnect and Client.OnDisconnect to perform custom processing after connecting and disconnecting.
+
+Currently, reconnection after interruption is not supported.
+
+### Subscribe
+
+`func (c *Client) Subscribe(stream string, handler func(msg *Event)) error`
+
+The client subscribes and monitors the server. `stream` is a custom string name, and `handler` is a custom processing function for received events.
+
 ## Example
+
+### Server
 
 ```go
 package main
@@ -58,35 +121,106 @@ func main() {
 
 ```
 
-## Install
+### Client
+
+```go
+package main
+
+import (
+  "context"
+
+  "github.com/hertz-contrib/sse"
+
+  "github.com/cloudwego/hertz/pkg/common/hlog"
+)
+
+func main() {
+  go func() {
+    // pass in the server-side URL to initialize the client	  
+    c := sse.NewClient("http://127.0.0.1:8888/sse")
+
+    // touch off when connected to the server
+    c.OnConnect(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client1 connect to server %s success with %s method", c.URL, c.Method)
+    })
+
+    // touch off when the connection is shutdown
+    c.OnDisconnect(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client1 disconnect to server %s success with %s method", c.URL, c.Method)
+    })
+
+    events := make(chan *sse.Event)
+    errChan := make(chan error)
+    go func() {
+      cErr := c.Subscribe("client1", func(msg *sse.Event) {
+        if msg.Data != nil {
+          events <- msg
+          return
+        }
+      })
+      errChan <- cErr
+    }()
+    for {
+      select {
+      case e := <-events:
+        hlog.Info(e)
+      case err := <-errChan:
+        hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+        return
+      }
+    }
+  }()
+
+  go func() {
+    // pass in the server-side URL to initialize the client	  
+    c := sse.NewClient("http://127.0.0.1:8888/sse")
+
+    // touch off when connected to the server
+    c.OnConnect(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client2 %s connect to server success with %s method", c.URL, c.Method)
+    })
+
+    // touch off when the connection is shutdown
+    c.OnDisconnect(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client2 %s disconnect to server success with %s method", c.URL, c.Method)
+    })
+
+    events := make(chan *sse.Event)
+    errChan := make(chan error)
+    go func() {
+      cErr := c.Subscribe("client2", func(msg *sse.Event) {
+        if msg.Data != nil {
+          events <- msg
+          return
+        }
+      })
+      errChan <- cErr
+    }()
+    for {
+      select {
+      case e := <-events:
+        hlog.Info(e)
+      case err := <-errChan:
+        hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+        return
+      }
+    }
+  }()
+
+  select {}
+}
 
 ```
-go get github.com/hertz-contrib/sse
-```
-
-## Headers
-
-The following headers are set when `sse.NewStream` is called:
-
-- ContentType: text/event-stream (always)
-- Cache-Control: no-cache (if not set)
-
-It's recommended to set `X-Accel-Buffering: no` if there is any proxy sitting between server and client.
-
-Also see:
-
-- [Server Sent Events are still not production ready after a decade. A lesson for me, a warning for you!](https://dev.to/miketalbot/server-sent-events-are-still-not-production-ready-after-a-decade-a-lesson-for-me-a-warning-for-you-2gie)
-- [For Server-Sent Events (SSE) what Nginx proxy configuration is appropriate?](https://serverfault.com/questions/801628/for-server-sent-events-sse-what-nginx-proxy-configuration-is-appropriate)
 
 ## Real-world examples
 
-This repository comes with two examples to demonstrate how to build realtime applications with server-sent event.
+This repository comes with two server-examples to demonstrate how to build realtime applications with server-sent event.
 
 ### Stock Price (examples/server/stockprice)
 
 A web server that push (randomly generated) stock price periodically.
 
-1. Run `exmaples/chat/main.go` to start server.
+1. Run `exmaples/server/chat/main.go` to start server.
 2. Send a GET request to `/price`
 
 ```bash
@@ -115,7 +249,7 @@ curl -N --location 'localhost:8888/price'
 A chat server that push new messages to clients using server-sent events. It supports both direct and broadcast
   messaging.
 
-1. Run `examples/chat/main.go` to start server.
+1. Run `examples/server/chat/main.go` to start server.
 2. Send a get request to `/chat/sse`.
 
 ```bash

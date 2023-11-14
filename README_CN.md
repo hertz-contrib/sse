@@ -97,11 +97,11 @@ func main() {
   h := server.Default()
 
   h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
-    // client can tell server last event it received with Last-Event-ID header
+    // 客户端可以通过 Last-Event-ID 标头告诉服务端它收到的最后一个事件
     lastEventID := sse.GetLastEventID(c)
     hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
 
-    // you must set status code and response headers before first render call
+    // 必须在第一次调用之前设置状态代码和响应标头
     c.SetStatusCode(http.StatusOK)
     s := sse.NewStream(c)
     for t := range time.NewTicker(1 * time.Second).C {
