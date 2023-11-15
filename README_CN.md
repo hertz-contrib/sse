@@ -127,14 +127,18 @@ func main() {
 package main
 
 import (
-  "context"
+	"context"
+	"sync"
 
-  "github.com/hertz-contrib/sse"
+	"github.com/hertz-contrib/sse"
 
-  "github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/cloudwego/hertz/pkg/common/hlog"
 )
 
+var wg sync.WaitGroup
+
 func main() {
+  wg.Add(2)	
   go func() {
     // 传入 server 端 URL 初始化客户端  	  
     c := sse.NewClient("http://127.0.0.1:8888/sse")
@@ -166,6 +170,7 @@ func main() {
         hlog.Info(e)
       case err := <-errChan:
         hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+		wg.Done()
         return
       }
     }
@@ -202,6 +207,7 @@ func main() {
         hlog.Info(e)
       case err := <-errChan:
         hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+		wg.Done()
         return
       }
     }
