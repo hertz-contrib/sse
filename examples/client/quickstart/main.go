@@ -38,13 +38,17 @@ package main
 
 import (
 	"context"
+	"sync"
 
 	"github.com/hertz-contrib/sse"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 )
 
+var wg sync.WaitGroup
+
 func main() {
+	wg.Add(2)
 	go func() {
 		c := sse.NewClient("http://127.0.0.1:8888/sse")
 
@@ -75,6 +79,7 @@ func main() {
 				hlog.Info(e)
 			case err := <-errChan:
 				hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+				wg.Done()
 				return
 			}
 		}
@@ -110,10 +115,11 @@ func main() {
 				hlog.Info(e)
 			case err := <-errChan:
 				hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+				wg.Done()
 				return
 			}
 		}
 	}()
 
-	select {}
+	wg.Wait()
 }

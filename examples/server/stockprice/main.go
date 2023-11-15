@@ -155,14 +155,13 @@ func (srv *Server) listen() {
 func (srv *Server) serveHTTP() app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		// Initialize client channel
-		clientChan := make(ClientChan)
+		clientChan := make(ClientChan, 1)
 
 		// Send new connection to event server
 		srv.NewClients <- clientChan
 
 		defer func() {
 			// Send closed connection to event server
-			<-clientChan
 			srv.ClosedClients <- clientChan
 		}()
 
