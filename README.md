@@ -18,61 +18,6 @@ This repository is a fork of [manucorporat/sse](https://github.com/manucorporat/
 ```
 go get github.com/hertz-contrib/sse
 ```
-## Server
-
-### Headers
-
-The following headers are set when `sse.NewStream` is called:
-
-- ContentType: text/event-stream (always)
-- Cache-Control: no-cache (if not set)
-
-It's recommended to set `X-Accel-Buffering: no` if there is any proxy sitting between server and client.
-
-Also see:
-
-- [Server Sent Events are still not production ready after a decade. A lesson for me, a warning for you!](https://dev.to/miketalbot/server-sent-events-are-still-not-production-ready-after-a-decade-a-lesson-for-me-a-warning-for-you-2gie)
-- [For Server-Sent Events (SSE) what Nginx proxy configuration is appropriate?](https://serverfault.com/questions/801628/for-server-sent-events-sse-what-nginx-proxy-configuration-is-appropriate)
-
-### GetLastEventID
-
-`func GetLastEventID(c *app.RequestContext) string`
-
-GetLastEventID retrieve Last-Event-ID header if present
-
-### Publish
-
-`func (c *Stream) Publish(event *Event) error`
-
-Event struct：
-```go
-type Event struct {
-	Event string
-	ID    string
-	Retry uint64
-	Data  []byte
-}
-```
-
-`Publish` push an event to client.
-
-## Client
-
-### NewClient
-
-`func NewClient(url string) *Client`
-
-Pass in the server-side URL to complete the initialization of the client. The default setting of `maxBufferSize` is 1 << 16, and the `Method` request method is `GET`
-
-You can set Client.Onconnect and Client.OnDisconnect to perform custom processing after connecting and disconnecting.
-
-Currently, reconnection after interruption is not supported.
-
-### Subscribe
-
-`func (c *Client) Subscribe(stream string, handler func(msg *Event)) error`
-
-The client subscribes and monitors the server. `stream` is a custom string name, and `handler` is a custom processing function for received events.
 
 ## Example
 
@@ -124,42 +69,6 @@ func main() {
 ### Client
 
 ```go
-/*
- * Copyright 2023 CloudWeGo Authors
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *  http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- * The MIT License (MIT)
- *
- * Copyright (c) 2014 Manuel Martínez-Almeida
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package main
 
 import (

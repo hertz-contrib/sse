@@ -17,63 +17,6 @@
 go get github.com/hertz-contrib/sse
 ```
 
-
-## 服务端
-
-### 请求头
-
-当 `sse.NewStream` 被调用的时候请求头被设置为下列所示：
-
-- ContentType: text/event-stream (总是)
-- Cache-Control: no-cache (如果没有被设置)
-
-如果在服务端和客户端之间存在代理，推荐设置 `X-Accel-Buffering: no`
-
-更多请见:
-
-- [Server Sent Events are still not production ready after a decade. A lesson for me, a warning for you!](https://dev.to/miketalbot/server-sent-events-are-still-not-production-ready-after-a-decade-a-lesson-for-me-a-warning-for-you-2gie)
-- [For Server-Sent Events (SSE) what Nginx proxy configuration is appropriate?](https://serverfault.com/questions/801628/for-server-sent-events-sse-what-nginx-proxy-configuration-is-appropriate)
-
-### GetLastEventID
-
-`func GetLastEventID(c *app.RequestContext) string`
-
-客户端可以通过 Last-Event-ID 标头告诉服务端它收到的最后一个事件
-
-### Publish
-
-`func (c *Stream) Publish(event *Event) error`
-
-Event 结构体：
-```go
-type Event struct {
-	Event string
-	ID    string
-	Retry uint64
-	Data  []byte
-}
-```
-
-服务端通过 `Publish` 推送事件到客户端
-
-## 客户端
-
-### NewClient
-
-`func NewClient(url string) *Client`
-
-传入 server 端 URL 完成对客户端的初始化，默认设置 `maxBufferSize` 为 1 << 16 ，`Method` 请求方法为 `GET`
-
-可以设置 Client.Onconnect 和 Client.OnDisconnect 来进行连接和中断连接之后的自定义处理
-
-目前暂不支持中断重连
-
-### Subscribe
-
-`func (c *Client) Subscribe(stream string, handler func(msg *Event)) error`
-
-客户端对服务端进行订阅监听，`stream` 是一个自定义的字符串名称，`handler` 是自定义的对收到事件的处理函数
-
 ## 示例
 
 ### 服务端
