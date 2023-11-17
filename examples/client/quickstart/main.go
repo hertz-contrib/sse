@@ -38,33 +38,88 @@ package main
 
 import (
 	"context"
+	"sync"
 
 	"github.com/hertz-contrib/sse"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 )
 
-func main() {
-	c := sse.NewClient("http://127.0.0.1:8888/sse")
+var wg sync.WaitGroup
 
-	events := make(chan *sse.Event)
-	errChan := make(chan error)
+func main() {
+	wg.Add(2)
 	go func() {
-		cErr := c.Subscribe("test", func(msg *sse.Event) {
-			if msg.Data != nil {
-				events <- msg
+		c := sse.NewClient("http://127.0.0.1:8888/sse")
+
+		// touch off when connected to the server
+		c.OnConnect(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client1 connect to server %s success with %s method", c.URL, c.Method)
+		})
+
+		// touch off when the connection is shutdown
+		c.OnDisconnect(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client1 disconnect to server %s success with %s method", c.URL, c.Method)
+		})
+
+		events := make(chan *sse.Event)
+		errChan := make(chan error)
+		go func() {
+			cErr := c.Subscribe("client1", func(msg *sse.Event) {
+				if msg.Data != nil {
+					events <- msg
+					return
+				}
+			})
+			errChan <- cErr
+		}()
+		for {
+			select {
+			case e := <-events:
+				hlog.Info(e)
+			case err := <-errChan:
+				hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+				wg.Done()
 				return
 			}
-		})
-		errChan <- cErr
-	}()
-	for {
-		select {
-		case e := <-events:
-			hlog.Info(e)
-		case err := <-errChan:
-			hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
-			return
 		}
-	}
+	}()
+
+	go func() {
+		c := sse.NewClient("http://127.0.0.1:8888/sse")
+
+		// touch off when connected to the server
+		c.OnConnect(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client2 %s connect to server success with %s method", c.URL, c.Method)
+		})
+
+		// touch off when the connection is shutdown
+		c.OnDisconnect(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client2 %s disconnect to server success with %s method", c.URL, c.Method)
+		})
+
+		events := make(chan *sse.Event)
+		errChan := make(chan error)
+		go func() {
+			cErr := c.Subscribe("client2", func(msg *sse.Event) {
+				if msg.Data != nil {
+					events <- msg
+					return
+				}
+			})
+			errChan <- cErr
+		}()
+		for {
+			select {
+			case e := <-events:
+				hlog.Info(e)
+			case err := <-errChan:
+				hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+				wg.Done()
+				return
+			}
+		}
+	}()
+
+	wg.Wait()
 }

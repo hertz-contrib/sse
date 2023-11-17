@@ -103,7 +103,10 @@ func main() {
 		c.SetStatusCode(http.StatusOK)
 		stream := sse.NewStream(c)
 		for event := range clientChan {
-			_ = stream.Publish(&event)
+			err := stream.Publish(&event)
+			if err != nil {
+				return
+			}
 		}
 	})
 
@@ -152,7 +155,7 @@ func (srv *Server) listen() {
 func (srv *Server) serveHTTP() app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		// Initialize client channel
-		clientChan := make(ClientChan)
+		clientChan := make(ClientChan, 1)
 
 		// Send new connection to event server
 		srv.NewClients <- clientChan
