@@ -65,7 +65,7 @@ func main() {
 		events := make(chan *sse.Event)
 		errChan := make(chan error)
 		go func() {
-			cErr := c.Subscribe("client1", func(msg *sse.Event) {
+			cErr := c.Subscribe(func(msg *sse.Event) {
 				if msg.Data != nil {
 					events <- msg
 					return
@@ -101,7 +101,7 @@ func main() {
 		events := make(chan *sse.Event)
 		errChan := make(chan error)
 		go func() {
-			cErr := c.Subscribe("client2", func(msg *sse.Event) {
+			cErr := c.Subscribe(func(msg *sse.Event) {
 				if msg.Data != nil {
 					events <- msg
 					return

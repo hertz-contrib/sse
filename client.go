@@ -74,14 +74,14 @@ func NewClient(url string) *Client {
 }
 
 // Subscribe to a data stream
-func (c *Client) Subscribe(stream string, handler func(msg *Event)) error {
-	return c.SubscribeWithContext(context.Background(), stream, handler)
+func (c *Client) Subscribe(handler func(msg *Event)) error {
+	return c.SubscribeWithContext(context.Background(), handler)
 }
 
 // SubscribeWithContext to a data stream with context
-func (c *Client) SubscribeWithContext(ctx context.Context, stream string, handler func(msg *Event)) error {
+func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Event)) error {
 	req, resp := protocol.AcquireRequest(), protocol.AcquireResponse()
-	err := c.request(ctx, req, resp, stream)
+	err := c.request(ctx, req, resp)
 	if err != nil {
 		return err
 	}
@@ -158,16 +158,6 @@ func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh 
 	}
 }
 
-// SubscribeRaw to an sse endpoint
-func (c *Client) SubscribeRaw(handler func(msg *Event)) error {
-	return c.Subscribe("", handler)
-}
-
-// SubscribeRawWithContext to an sse endpoint with context
-func (c *Client) SubscribeRawWithContext(ctx context.Context, handler func(msg *Event)) error {
-	return c.SubscribeWithContext(ctx, "", handler)
-}
-
 // OnDisconnect specifies the function to run when the connection disconnects
 func (c *Client) OnDisconnect(fn ConnCallback) {
 	c.disconnectCallback = fn
@@ -183,13 +173,9 @@ func (c *Client) SetMaxBufferSize(size int) {
 	c.maxBufferSize = size
 }
 
-func (c *Client) request(ctx context.Context, req *protocol.Request, resp *protocol.Response, stream string) error {
+func (c *Client) request(ctx context.Context, req *protocol.Request, resp *protocol.Response) error {
 	req.SetMethod(c.Method)
 	req.SetRequestURI(c.URL)
-	// Setup request, specify stream to connect to
-	if stream != "" {
-		req.URI().QueryArgs().Add("stream", stream)
-	}
 
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Accept", "text/event-stream")

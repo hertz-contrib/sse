@@ -156,7 +156,7 @@ func TestClientSubscribe(t *testing.T) {
 	events := make(chan *Event)
 	var cErr error
 	go func() {
-		cErr = c.Subscribe("test", func(msg *Event) {
+		cErr = c.Subscribe(func(msg *Event) {
 			if msg.Data != nil {
 				events <- msg
 				return
@@ -182,7 +182,7 @@ func TestClientSubscribeMultiline(t *testing.T) {
 	var cErr error
 
 	go func() {
-		cErr = c.Subscribe("test", func(msg *Event) {
+		cErr = c.Subscribe(func(msg *Event) {
 			if msg.Data != nil {
 				events <- msg
 				return
@@ -209,7 +209,7 @@ func TestClientOnConnect(t *testing.T) {
 		called <- struct{}{}
 	})
 
-	go c.Subscribe("test", func(msg *Event) {})
+	go c.Subscribe(func(msg *Event) {})
 
 	time.Sleep(time.Second)
 	assert.DeepEqual(t, struct{}{}, <-called)
@@ -220,7 +220,7 @@ func TestClientUnsubscribe401(t *testing.T) {
 	time.Sleep(time.Second)
 	c := NewClient("http://127.0.0.1:9009/sse")
 
-	err := c.SubscribeRaw(func(ev *Event) {
+	err := c.Subscribe(func(ev *Event) {
 		// this shouldn't run
 		assert.False(t, true)
 	})
@@ -241,7 +241,7 @@ func TestClientLargeData(t *testing.T) {
 	ec := make(chan *Event, 1)
 
 	go func() {
-		c.Subscribe("test", func(ev *Event) {
+		c.Subscribe(func(ev *Event) {
 			ec <- ev
 		})
 	}()
