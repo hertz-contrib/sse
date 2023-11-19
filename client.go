@@ -25,6 +25,8 @@ import (
 	"io"
 	"sync/atomic"
 
+	"github.com/cloudwego/hertz/pkg/network/standard"
+
 	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
@@ -58,7 +60,7 @@ type Client struct {
 	LastEventID        atomic.Value // []byte
 }
 
-var defaultClient, _ = client.NewClient(client.WithResponseBodyStream(true))
+var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()), client.WithResponseBodyStream(true))
 
 // NewClient creates a new client
 func NewClient(url string) *Client {
