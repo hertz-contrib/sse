@@ -9,7 +9,7 @@ on:
       - "!**.md"
 name: Benchmark
 jobs:
-  Compare:
+  compare:
     runs-on: ubuntu-20.04
     steps:
       - name: Set up Go
@@ -34,6 +34,5 @@ jobs:
           benchmark-data-dir-path: 'benchmarks'
           fail-on-alert: true
           comment-on-alert: true
-          alert-comment-cc-user: '@Skyenought'
           auto-push: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
           save-data-file: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' }}
