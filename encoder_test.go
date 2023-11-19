@@ -244,10 +244,10 @@ func BenchmarkNoRetrySSE(b *testing.B) {
 }
 
 func BenchmarkSimpleSSE(b *testing.B) {
-	b.ResetTimer()
-	b.ReportAllocs()
 	buf := new(bytes.Buffer)
 
+	b.ResetTimer()
+	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		_ = Encode(buf, &Event{
 			Event: "new_message",

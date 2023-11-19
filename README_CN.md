@@ -223,6 +223,12 @@ curl -N --location 'http://localhost:8888/chat/sse?username=hertz'
 #
 #event:direct
 #data:{"Type":"direct","From":"kitex","To":"hertz","Message":"hello hertz","Timestamp":"2023-04-10T23:48:56.212855+08:00"}
-#
 
 ```
+
+
+## Benchmark 结果
+
+每次提交的所有的 Benchmark 结果都已存储，可在此处进行查看：
+
+https://hertz-contrib.github.io/sse/benchmarks/

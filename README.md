@@ -226,6 +226,11 @@ curl -N --location 'http://localhost:8888/chat/sse?username=hertz'
 #
 #event:direct
 #data:{"Type":"direct","From":"kitex","To":"hertz","Message":"hello hertz","Timestamp":"2023-04-10T23:48:56.212855+08:00"}
-#
 
 ```
+
+## Benchmark Results
+
+All benchmarks are stored for each commit, they can be viewed here:
+
+https://hertz-contrib.github.io/sse/benchmarks/
