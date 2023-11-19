@@ -108,14 +108,16 @@ func TestNewStream(t *testing.T) {
 
 func BenchmarkNewStream(b *testing.B) {
 	var c app.RequestContext
+	var s *Stream
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		s := NewStream(&c)
-
-		assert.DeepEqual(b, ContentType, string(c.Response.Header.ContentType()))
-		assert.DeepEqual(b, noCache, c.Response.Header.Get(cacheControl))
-		assert.NotNil(b, c.Response.GetHijackWriter())
-		assert.NotNil(b, s)
+		s = NewStream(&c)
 	}
+
+	assert.DeepEqual(b, ContentType, string(c.Response.Header.ContentType()))
+	assert.DeepEqual(b, noCache, c.Response.Header.Get(cacheControl))
+	assert.NotNil(b, c.Response.GetHijackWriter())
+	assert.NotNil(b, s)
 }
 
 type BufferExtWriter struct {
@@ -155,6 +157,7 @@ func BenchmarkStream_Publish(b *testing.B) {
 	s.w = &BufferExtWriter{
 		buffer: &buffer,
 	}
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		s.Publish(&Event{
 			Data: []byte("hertz"),
