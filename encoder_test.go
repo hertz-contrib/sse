@@ -40,6 +40,7 @@ package sse
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/json"
 
@@ -249,6 +250,7 @@ func BenchmarkSimpleSSE(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
+		time.Sleep(time.Second)
 		_ = Encode(buf, &Event{
 			Event: "new_message",
 			Data:  []byte("hi! how are you? I am fine. this is a long stupid message!!!"),
