@@ -125,7 +125,7 @@ func main() {
 
     // 连接到服务端的时候触发
     c.SetOnConnectValidator(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client2 %s connect to server success with %s method",c.GetURL(), c.GetMethod()v)
+      hlog.Infof("client2 %s connect to server success with %s method",c.GetURL(), c.GetMethod())
     })
 
     // 服务端断开连接的时候触发
