@@ -50,10 +50,10 @@ type Client struct {
 	HertzClient        *client.Client
 	disconnectCallback ConnCallback
 	connectedCallback  ConnCallback
-	ResponseValidator  ResponseValidator
-	Headers            map[string]string
-	URL                string
-	Method             string
+	responseValidator  ResponseValidator
+	headers            map[string]string
+	url                string
+	method             string
 	maxBufferSize      int
 	connected          bool
 	EncodingBase64     bool
@@ -65,11 +65,11 @@ var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()),
 // NewClient creates a new client
 func NewClient(url string) *Client {
 	c := &Client{
-		URL:           url,
+		url:           url,
 		HertzClient:   defaultClient,
-		Headers:       make(map[string]string),
+		headers:       make(map[string]string),
 		maxBufferSize: 1 << 16,
-		Method:        consts.MethodGet,
+		method:        consts.MethodGet,
 	}
 
 	return c
@@ -91,7 +91,7 @@ func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Eve
 		protocol.ReleaseRequest(req)
 		protocol.ReleaseResponse(resp)
 	}()
-	if validator := c.ResponseValidator; validator != nil {
+	if validator := c.responseValidator; validator != nil {
 		err = validator(ctx, req, resp)
 		if err != nil {
 			return err
@@ -160,13 +160,13 @@ func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh 
 	}
 }
 
-// OnDisconnect specifies the function to run when the connection disconnects
-func (c *Client) OnDisconnect(fn ConnCallback) {
+// SetDisconnectValidator specifies the function to run when the connection disconnects
+func (c *Client) SetDisconnectValidator(fn ConnCallback) {
 	c.disconnectCallback = fn
 }
 
-// OnConnect specifies the function to run when the connection is successful
-func (c *Client) OnConnect(fn ConnCallback) {
+// SetOnConnectValidator specifies the function to run when the connection is successful
+func (c *Client) SetOnConnectValidator(fn ConnCallback) {
 	c.connectedCallback = fn
 }
 
@@ -175,9 +175,44 @@ func (c *Client) SetMaxBufferSize(size int) {
 	c.maxBufferSize = size
 }
 
+// SetURL  set sse client url
+func (c *Client) SetURL(url string) {
+	c.url = url
+}
+
+// SetMethod set sse client request method
+func (c *Client) SetMethod(method string) {
+	c.method = method
+}
+
+// SetHeaders set sse client headers
+func (c *Client) SetHeaders(headers map[string]string) {
+	c.headers = headers
+}
+
+// SetResponseValidator set sse client responseValidator
+func (c *Client) SetResponseValidator(responseValidator ResponseValidator) {
+	c.responseValidator = responseValidator
+}
+
+// GetURL get sse client url
+func (c *Client) GetURL() string {
+	return c.url
+}
+
+// GetHeaders get sse client headers
+func (c *Client) GetHeaders() map[string]string {
+	return c.headers
+}
+
+// GetMethod get sse client method
+func (c *Client) GetMethod() string {
+	return c.method
+}
+
 func (c *Client) request(ctx context.Context, req *protocol.Request, resp *protocol.Response) error {
-	req.SetMethod(c.Method)
-	req.SetRequestURI(c.URL)
+	req.SetMethod(c.method)
+	req.SetRequestURI(c.url)
 
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Accept", "text/event-stream")
@@ -188,7 +223,7 @@ func (c *Client) request(ctx context.Context, req *protocol.Request, resp *proto
 		req.Header.Set(LastEventID, string(lastID))
 	}
 	// Add user specified headers
-	for k, v := range c.Headers {
+	for k, v := range c.headers {
 		req.Header.Set(k, v)
 	}
 
