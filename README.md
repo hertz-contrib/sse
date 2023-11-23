@@ -89,13 +89,13 @@ func main() {
     c := sse.NewClient("http://127.0.0.1:8888/sse")
 
     // touch off when connected to the server
-    c.OnConnect(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client1 connect to server %s success with %s method", c.URL, c.Method)
+    c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client1 connect to server %s success with %s method", c.GetURL(), c.GetMethod())
     })
 
     // touch off when the connection is shutdown
-    c.OnDisconnect(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client1 disconnect to server %s success with %s method", c.URL, c.Method)
+    c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client1 disconnect to server %s success with %s method", c.GetURL(), c.GetMethod())
     })
 
     events := make(chan *sse.Event)
@@ -126,13 +126,13 @@ func main() {
     c := sse.NewClient("http://127.0.0.1:8888/sse")
 
     // touch off when connected to the server
-    c.OnConnect(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client2 %s connect to server success with %s method", c.URL, c.Method)
+    c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client2 %s connect to server success with %s method", c.GetURL(), c.GetMethod())
     })
 
     // touch off when the connection is shutdown
-    c.OnDisconnect(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client2 %s disconnect to server success with %s method", c.URL, c.Method)
+    c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client2 %s disconnect to server success with %s method", c.GetURL(), c.GetMethod())
     })
 
     events := make(chan *sse.Event)

@@ -87,13 +87,13 @@ func main() {
     c := sse.NewClient("http://127.0.0.1:8888/sse")
 
     // 连接到服务端的时候触发
-    c.OnConnect(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client1 connect to server %s success with %s method", c.URL, c.Method)
+    c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client1 connect to server %s success with %s method", c.GetURL(), c.GetMethod())
     })
 
     // 服务端断开连接的时候触发
-    c.OnDisconnect(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client1 disconnect to server %s success with %s method", c.URL, c.Method)
+    c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client1 disconnect to server %s success with %s method", c.GetURL(), c.GetMethod())
     })
 
     events := make(chan *sse.Event)
@@ -124,13 +124,13 @@ func main() {
     c := sse.NewClient("http://127.0.0.1:8888/sse")
 
     // 连接到服务端的时候触发
-    c.OnConnect(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client2 %s connect to server success with %s method", c.URL, c.Method)
+    c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client2 %s connect to server success with %s method",c.GetURL(), c.GetMethod())
     })
 
     // 服务端断开连接的时候触发
-    c.OnDisconnect(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client2 %s disconnect to server success with %s method", c.URL, c.Method)
+    c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
+      hlog.Infof("client2 %s disconnect to server success with %s method", c.GetURL(), c.GetMethod())
     })
 
     events := make(chan *sse.Event)

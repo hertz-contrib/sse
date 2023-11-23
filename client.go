@@ -42,22 +42,22 @@ var (
 // ConnCallback defines a function to be called on a particular connection event
 type ConnCallback func(ctx context.Context, client *Client)
 
-// ResponseValidator validates a response
-type ResponseValidator func(ctx context.Context, req *protocol.Request, resp *protocol.Response) error
+// ResponseCallback validates a response
+type ResponseCallback func(ctx context.Context, req *protocol.Request, resp *protocol.Response) error
 
 // Client handles an incoming server stream
 type Client struct {
-	HertzClient        *client.Client
+	hertzClient        *client.Client
 	disconnectCallback ConnCallback
 	connectedCallback  ConnCallback
-	ResponseValidator  ResponseValidator
-	Headers            map[string]string
-	URL                string
-	Method             string
+	responseCallback   ResponseCallback
+	headers            map[string]string
+	url                string
+	method             string
 	maxBufferSize      int
 	connected          bool
-	EncodingBase64     bool
-	LastEventID        atomic.Value // []byte
+	encodingBase64     bool
+	lastEventID        atomic.Value // []byte
 }
 
 var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()), client.WithResponseBodyStream(true))
@@ -65,11 +65,11 @@ var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()),
 // NewClient creates a new client
 func NewClient(url string) *Client {
 	c := &Client{
-		URL:           url,
-		HertzClient:   defaultClient,
-		Headers:       make(map[string]string),
+		url:           url,
+		hertzClient:   defaultClient,
+		headers:       make(map[string]string),
 		maxBufferSize: 1 << 16,
-		Method:        consts.MethodGet,
+		method:        consts.MethodGet,
 	}
 
 	return c
@@ -91,8 +91,8 @@ func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Eve
 		protocol.ReleaseRequest(req)
 		protocol.ReleaseResponse(resp)
 	}()
-	if validator := c.ResponseValidator; validator != nil {
-		err = validator(ctx, req, resp)
+	if Callback := c.responseCallback; Callback != nil {
+		err = Callback(ctx, req, resp)
 		if err != nil {
 			return err
 		}
@@ -147,9 +147,9 @@ func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh 
 		var msg *Event
 		if msg, err = c.processEvent(event); err == nil {
 			if len(msg.ID) > 0 {
-				c.LastEventID.Store(msg.ID)
+				c.lastEventID.Store(msg.ID)
 			} else {
-				msg.ID, _ = c.LastEventID.Load().(string)
+				msg.ID, _ = c.lastEventID.Load().(string)
 			}
 
 			// Send downstream if the event has something useful
@@ -160,13 +160,13 @@ func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh 
 	}
 }
 
-// OnDisconnect specifies the function to run when the connection disconnects
-func (c *Client) OnDisconnect(fn ConnCallback) {
+// SetDisconnectCallback specifies the function to run when the connection disconnects
+func (c *Client) SetDisconnectCallback(fn ConnCallback) {
 	c.disconnectCallback = fn
 }
 
-// OnConnect specifies the function to run when the connection is successful
-func (c *Client) OnConnect(fn ConnCallback) {
+// SetOnConnectCallback specifies the function to run when the connection is successful
+func (c *Client) SetOnConnectCallback(fn ConnCallback) {
 	c.connectedCallback = fn
 }
 
@@ -175,24 +175,79 @@ func (c *Client) SetMaxBufferSize(size int) {
 	c.maxBufferSize = size
 }
 
+// SetURL  set sse client url
+func (c *Client) SetURL(url string) {
+	c.url = url
+}
+
+// SetMethod set sse client request method
+func (c *Client) SetMethod(method string) {
+	c.method = method
+}
+
+// SetHeaders set sse client headers
+func (c *Client) SetHeaders(headers map[string]string) {
+	c.headers = headers
+}
+
+// SetResponseCallback set sse client responseCallback
+func (c *Client) SetResponseCallback(responseCallback ResponseCallback) {
+	c.responseCallback = responseCallback
+}
+
+// SetHertzClient set sse client
+func (c *Client) SetHertzClient(hertzClient *client.Client) {
+	c.hertzClient = hertzClient
+}
+
+// SetEncodingBase64 set sse client whether use the base64
+func (c *Client) SetEncodingBase64(encodingBase64 bool) {
+	c.encodingBase64 = encodingBase64
+}
+
+// GetURL get sse client url
+func (c *Client) GetURL() string {
+	return c.url
+}
+
+// GetHeaders get sse client headers
+func (c *Client) GetHeaders() map[string]string {
+	return c.headers
+}
+
+// GetMethod get sse client method
+func (c *Client) GetMethod() string {
+	return c.method
+}
+
+// GetHertzClient get sse client
+func (c *Client) GetHertzClient() *client.Client {
+	return c.hertzClient
+}
+
+// GetLastEventID get sse client lastEventID
+func (c *Client) GetLastEventID() []byte {
+	return c.lastEventID.Load().([]byte)
+}
+
 func (c *Client) request(ctx context.Context, req *protocol.Request, resp *protocol.Response) error {
-	req.SetMethod(c.Method)
-	req.SetRequestURI(c.URL)
+	req.SetMethod(c.method)
+	req.SetRequestURI(c.url)
 
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Connection", "keep-alive")
 
-	lastID, exists := c.LastEventID.Load().([]byte)
+	lastID, exists := c.lastEventID.Load().([]byte)
 	if exists && lastID != nil {
 		req.Header.Set(LastEventID, string(lastID))
 	}
 	// Add user specified headers
-	for k, v := range c.Headers {
+	for k, v := range c.headers {
 		req.Header.Set(k, v)
 	}
 
-	err := c.HertzClient.Do(ctx, req, resp)
+	err := c.hertzClient.Do(ctx, req, resp)
 	return err
 }
 
@@ -227,7 +282,7 @@ func (c *Client) processEvent(msg []byte) (event *Event, err error) {
 	// Trim the last "\n" per the spec.
 	e.Data = bytes.TrimSuffix(e.Data, []byte("\n"))
 
-	if c.EncodingBase64 {
+	if c.encodingBase64 {
 		buf := make([]byte, base64.StdEncoding.DecodedLen(len(e.Data)))
 
 		n, err := base64.StdEncoding.Decode(buf, e.Data)
