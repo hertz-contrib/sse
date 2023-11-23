@@ -56,8 +56,8 @@ type Client struct {
 	method             string
 	maxBufferSize      int
 	connected          bool
-	EncodingBase64     bool
-	LastEventID        atomic.Value // []byte
+	encodingBase64     bool
+	lastEventID        atomic.Value // []byte
 }
 
 var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()), client.WithResponseBodyStream(true))
@@ -147,9 +147,9 @@ func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh 
 		var msg *Event
 		if msg, err = c.processEvent(event); err == nil {
 			if len(msg.ID) > 0 {
-				c.LastEventID.Store(msg.ID)
+				c.lastEventID.Store(msg.ID)
 			} else {
-				msg.ID, _ = c.LastEventID.Load().(string)
+				msg.ID, _ = c.lastEventID.Load().(string)
 			}
 
 			// Send downstream if the event has something useful
@@ -200,6 +200,11 @@ func (c *Client) SetHertzClient(hertzClient *client.Client) {
 	c.hertzClient = hertzClient
 }
 
+// SetEncodingBase64 set sse client whether use the base64
+func (c *Client) SetEncodingBase64(encodingBase64 bool) {
+	c.encodingBase64 = encodingBase64
+}
+
 // GetURL get sse client url
 func (c *Client) GetURL() string {
 	return c.url
@@ -220,6 +225,11 @@ func (c *Client) GetHertzClient() *client.Client {
 	return c.hertzClient
 }
 
+// GetLastEventID get sse client lastEventID
+func (c *Client) GetLastEventID() []byte {
+	return c.lastEventID.Load().([]byte)
+}
+
 func (c *Client) request(ctx context.Context, req *protocol.Request, resp *protocol.Response) error {
 	req.SetMethod(c.method)
 	req.SetRequestURI(c.url)
@@ -228,7 +238,7 @@ func (c *Client) request(ctx context.Context, req *protocol.Request, resp *proto
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Connection", "keep-alive")
 
-	lastID, exists := c.LastEventID.Load().([]byte)
+	lastID, exists := c.lastEventID.Load().([]byte)
 	if exists && lastID != nil {
 		req.Header.Set(LastEventID, string(lastID))
 	}
@@ -272,7 +282,7 @@ func (c *Client) processEvent(msg []byte) (event *Event, err error) {
 	// Trim the last "\n" per the spec.
 	e.Data = bytes.TrimSuffix(e.Data, []byte("\n"))
 
-	if c.EncodingBase64 {
+	if c.encodingBase64 {
 		buf := make([]byte, base64.StdEncoding.DecodedLen(len(e.Data)))
 
 		n, err := base64.StdEncoding.Decode(buf, e.Data)
