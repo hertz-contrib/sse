@@ -42,15 +42,15 @@ var (
 // ConnCallback defines a function to be called on a particular connection event
 type ConnCallback func(ctx context.Context, client *Client)
 
-// ResponseValidator validates a response
-type ResponseValidator func(ctx context.Context, req *protocol.Request, resp *protocol.Response) error
+// ResponseCallback validates a response
+type ResponseCallback func(ctx context.Context, req *protocol.Request, resp *protocol.Response) error
 
 // Client handles an incoming server stream
 type Client struct {
-	HertzClient        *client.Client
+	hertzClient        *client.Client
 	disconnectCallback ConnCallback
 	connectedCallback  ConnCallback
-	responseValidator  ResponseValidator
+	responseCallback   ResponseCallback
 	headers            map[string]string
 	url                string
 	method             string
@@ -66,7 +66,7 @@ var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()),
 func NewClient(url string) *Client {
 	c := &Client{
 		url:           url,
-		HertzClient:   defaultClient,
+		hertzClient:   defaultClient,
 		headers:       make(map[string]string),
 		maxBufferSize: 1 << 16,
 		method:        consts.MethodGet,
@@ -91,8 +91,8 @@ func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Eve
 		protocol.ReleaseRequest(req)
 		protocol.ReleaseResponse(resp)
 	}()
-	if validator := c.responseValidator; validator != nil {
-		err = validator(ctx, req, resp)
+	if Callback := c.responseCallback; Callback != nil {
+		err = Callback(ctx, req, resp)
 		if err != nil {
 			return err
 		}
@@ -160,13 +160,13 @@ func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh 
 	}
 }
 
-// SetDisconnectValidator specifies the function to run when the connection disconnects
-func (c *Client) SetDisconnectValidator(fn ConnCallback) {
+// SetDisconnectCallback specifies the function to run when the connection disconnects
+func (c *Client) SetDisconnectCallback(fn ConnCallback) {
 	c.disconnectCallback = fn
 }
 
-// SetOnConnectValidator specifies the function to run when the connection is successful
-func (c *Client) SetOnConnectValidator(fn ConnCallback) {
+// SetOnConnectCallback specifies the function to run when the connection is successful
+func (c *Client) SetOnConnectCallback(fn ConnCallback) {
 	c.connectedCallback = fn
 }
 
@@ -190,9 +190,14 @@ func (c *Client) SetHeaders(headers map[string]string) {
 	c.headers = headers
 }
 
-// SetResponseValidator set sse client responseValidator
-func (c *Client) SetResponseValidator(responseValidator ResponseValidator) {
-	c.responseValidator = responseValidator
+// SetResponseCallback set sse client responseCallback
+func (c *Client) SetResponseCallback(responseCallback ResponseCallback) {
+	c.responseCallback = responseCallback
+}
+
+// SetHertzClient set sse client
+func (c *Client) SetHertzClient(hertzClient *client.Client) {
+	c.hertzClient = hertzClient
 }
 
 // GetURL get sse client url
@@ -208,6 +213,11 @@ func (c *Client) GetHeaders() map[string]string {
 // GetMethod get sse client method
 func (c *Client) GetMethod() string {
 	return c.method
+}
+
+// GetHertzClient get sse client
+func (c *Client) GetHertzClient() *client.Client {
+	return c.hertzClient
 }
 
 func (c *Client) request(ctx context.Context, req *protocol.Request, resp *protocol.Response) error {
@@ -227,7 +237,7 @@ func (c *Client) request(ctx context.Context, req *protocol.Request, resp *proto
 		req.Header.Set(k, v)
 	}
 
-	err := c.HertzClient.Do(ctx, req, resp)
+	err := c.hertzClient.Do(ctx, req, resp)
 	return err
 }
 

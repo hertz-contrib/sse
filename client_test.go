@@ -205,7 +205,7 @@ func TestClientOnConnect(t *testing.T) {
 	c := NewClient("http://127.0.0.1:9000/sse")
 
 	called := make(chan struct{})
-	c.SetOnConnectValidator(func(ctx context.Context, client *Client) {
+	c.SetOnConnectCallback(func(ctx context.Context, client *Client) {
 		called <- struct{}{}
 	})
 
