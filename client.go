@@ -270,12 +270,12 @@ func (c *Client) GetContentType() []byte {
 	return c.contentType
 }
 
-// GetMultipartFormData get sse client multipartFormData
+// GetMultipartFormData get sse client request multipartFormData
 func (c *Client) GetMultipartFormData() map[string]string {
 	return c.multipartFormData
 }
 
-// GetFormData get sse client formData
+// GetFormData get sse client request formData
 func (c *Client) GetFormData() map[string]string {
 	return c.formData
 }
