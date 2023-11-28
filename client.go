@@ -175,37 +175,37 @@ func (c *Client) SetOnConnectCallback(fn ConnCallback) {
 	c.connectedCallback = fn
 }
 
-// SetMaxBufferSize  set sse client MaxBufferSize
+// SetMaxBufferSize set sse client MaxBufferSize
 func (c *Client) SetMaxBufferSize(size int) {
 	c.maxBufferSize = size
 }
 
-// SetURL  set sse client url
+// SetURL set sse client url
 func (c *Client) SetURL(url string) {
 	c.url = url
 }
 
-// SetBody  set sse client request body
+// SetBody set sse client request body
 func (c *Client) SetBody(body []byte) {
 	c.body = body
 }
 
-// SetQueryString  set sse client request queryString
+// SetQueryString set sse client request queryString
 func (c *Client) SetQueryString(queryString string) {
 	c.queryString = queryString
 }
 
-// SetContentType  set sse client request ContentType
+// SetContentType set sse client request ContentType
 func (c *Client) SetContentType(contentType []byte) {
 	c.contentType = contentType
 }
 
-// SetFormData  set sse client request formData
+// SetFormData set sse client request formData
 func (c *Client) SetFormData(formData map[string]string) {
 	c.formData = formData
 }
 
-// SetMultipartFormData  set sse client request multipartFormData
+// SetMultipartFormData set sse client request multipartFormData
 func (c *Client) SetMultipartFormData(multipartFormData map[string]string) {
 	c.multipartFormData = multipartFormData
 }
