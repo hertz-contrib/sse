@@ -58,6 +58,9 @@ type Client struct {
 	connected          bool
 	encodingBase64     bool
 	lastEventID        atomic.Value // []byte
+	body               []byte
+	queryString        string
+	contentType        []byte
 }
 
 var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()), client.WithResponseBodyStream(true))
@@ -180,6 +183,11 @@ func (c *Client) SetURL(url string) {
 	c.url = url
 }
 
+// SetURL  set sse client body
+func (c *Client) SetBody(body []byte) {
+	c.body = body
+}
+
 // SetMethod set sse client request method
 func (c *Client) SetMethod(method string) {
 	c.method = method
@@ -247,6 +255,17 @@ func (c *Client) request(ctx context.Context, req *protocol.Request, resp *proto
 		req.Header.Set(k, v)
 	}
 
+	if len(c.body) != 0 {
+		req.SetBody(c.body)
+	}
+	if c.queryString != "" {
+		req.SetQueryString(c.queryString)
+	}
+	if len(c.contentType) != 0 {
+		req.Header.SetContentTypeBytes(c.contentType)
+	}
+	req.SetMultipartFormData(map[string]string{})
+	req.SetFormData(map[string]string{})
 	err := c.hertzClient.Do(ctx, req, resp)
 	return err
 }
