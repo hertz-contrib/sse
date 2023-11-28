@@ -185,20 +185,27 @@ func (c *Client) SetURL(url string) {
 	c.url = url
 }
 
-// SetBody  set sse client body
+// SetBody  set sse client request body
 func (c *Client) SetBody(body []byte) {
 	c.body = body
 }
 
-// SetQueryString  set sse client queryString
+// SetQueryString  set sse client request queryString
 func (c *Client) SetQueryString(queryString string) {
 	c.queryString = queryString
 }
 
-// SetContentType  set sse client ContentType
+// SetContentType  set sse client request ContentType
 func (c *Client) SetContentType(contentType []byte) {
 	c.contentType = contentType
 }
+
+// SetFormData  set sse client request formData
+func (c *Client) SetFormData(formData map[string]string) {
+	c.formData = formData
+}
+
+// SetMultipartFormData  set sse client request multipartFormData
 func (c *Client) SetMultipartFormData(multipartFormData map[string]string) {
 	c.multipartFormData = multipartFormData
 }
@@ -248,17 +255,17 @@ func (c *Client) GetHertzClient() *client.Client {
 	return c.hertzClient
 }
 
-// GetBody get sse client body
+// GetBody get sse client request body
 func (c *Client) GetBody() []byte {
 	return c.body
 }
 
-// GetQueryString get sse client queryString
+// GetQueryString get sse client request queryString
 func (c *Client) GetQueryString() string {
 	return c.queryString
 }
 
-// GetContentType get sse client contentType
+// GetContentType get sse client request contentType
 func (c *Client) GetContentType() []byte {
 	return c.contentType
 }
