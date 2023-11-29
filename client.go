@@ -58,6 +58,7 @@ type Client struct {
 	connected          bool
 	encodingBase64     bool
 	lastEventID        atomic.Value // []byte
+	body               []byte
 }
 
 var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()), client.WithResponseBodyStream(true))
@@ -170,14 +171,19 @@ func (c *Client) SetOnConnectCallback(fn ConnCallback) {
 	c.connectedCallback = fn
 }
 
-// SetMaxBufferSize  set sse client MaxBufferSize
+// SetMaxBufferSize set sse client MaxBufferSize
 func (c *Client) SetMaxBufferSize(size int) {
 	c.maxBufferSize = size
 }
 
-// SetURL  set sse client url
+// SetURL set sse client url
 func (c *Client) SetURL(url string) {
 	c.url = url
+}
+
+// SetBody set sse client request body
+func (c *Client) SetBody(body []byte) {
+	c.body = body
 }
 
 // SetMethod set sse client request method
@@ -225,6 +231,11 @@ func (c *Client) GetHertzClient() *client.Client {
 	return c.hertzClient
 }
 
+// GetBody get sse client request body
+func (c *Client) GetBody() []byte {
+	return c.body
+}
+
 // GetLastEventID get sse client lastEventID
 func (c *Client) GetLastEventID() []byte {
 	return c.lastEventID.Load().([]byte)
@@ -245,6 +256,10 @@ func (c *Client) request(ctx context.Context, req *protocol.Request, resp *proto
 	// Add user specified headers
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
+	}
+
+	if len(c.body) != 0 {
+		req.SetBody(c.body)
 	}
 
 	err := c.hertzClient.Do(ctx, req, resp)
