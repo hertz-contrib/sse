@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cloudwego/hertz/pkg/protocol/consts"
+
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
@@ -117,6 +119,28 @@ func newServer401(port string) {
 	})
 
 	h.Spin()
+}
+
+func newServerWithPOSTBody(empty bool, port string) {
+	h := server.Default(server.WithHostPorts("0.0.0.0:" + port))
+
+	h.POST("/sse", func(ctx context.Context, c *app.RequestContext) {
+		// client can tell server last event it received with Last-Event-ID header
+		lastEventID := GetLastEventID(c)
+		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
+
+		// you must set status code and response headers before first render call
+		c.SetStatusCode(http.StatusOK)
+		s := NewStream(c)
+		body, err := c.Body()
+		if err != nil {
+			return
+		}
+		for a := 0; a < 10; a++ {
+			s.Publish(&Event{Data: body})
+		}
+	})
+	h.Run()
 }
 
 func publishMsgs(s *Stream, empty bool, count int) {
@@ -274,4 +298,30 @@ func TestTrimHeader(t *testing.T) {
 		got := trimHeader(len(headerData), tc.input)
 		assert.DeepEqual(t, tc.want, got)
 	}
+}
+
+func TestRequestWithBody(t *testing.T) {
+	go newServerWithPOSTBody(false, "9006")
+	time.Sleep(time.Second)
+	c := NewClient("http://127.0.0.1:9006/sse")
+	c.SetMethod(consts.MethodPost)
+	c.body = []byte(`{"msg":"echo"}`)
+	events := make(chan *Event)
+	var cErr error
+	go func() {
+		cErr = c.Subscribe(func(msg *Event) {
+			if msg.Data != nil {
+				events <- msg
+				return
+			}
+		})
+	}()
+
+	for i := 0; i < 5; i++ {
+		msg, err := wait(events, time.Second*1)
+		assert.Nil(t, err)
+		assert.DeepEqual(t, []byte(`{"msg":"echo"}`), msg)
+	}
+
+	assert.Nil(t, cErr)
 }
