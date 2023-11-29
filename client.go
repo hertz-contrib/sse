@@ -59,10 +59,6 @@ type Client struct {
 	encodingBase64     bool
 	lastEventID        atomic.Value // []byte
 	body               []byte
-	queryString        string
-	contentType        []byte
-	multipartFormData  map[string]string
-	formData           map[string]string
 }
 
 var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()), client.WithResponseBodyStream(true))
@@ -190,26 +186,6 @@ func (c *Client) SetBody(body []byte) {
 	c.body = body
 }
 
-// SetQueryString set sse client request queryString
-func (c *Client) SetQueryString(queryString string) {
-	c.queryString = queryString
-}
-
-// SetContentType set sse client request ContentType
-func (c *Client) SetContentType(contentType []byte) {
-	c.contentType = contentType
-}
-
-// SetFormData set sse client request formData
-func (c *Client) SetFormData(formData map[string]string) {
-	c.formData = formData
-}
-
-// SetMultipartFormData set sse client request multipartFormData
-func (c *Client) SetMultipartFormData(multipartFormData map[string]string) {
-	c.multipartFormData = multipartFormData
-}
-
 // SetMethod set sse client request method
 func (c *Client) SetMethod(method string) {
 	c.method = method
@@ -260,26 +236,6 @@ func (c *Client) GetBody() []byte {
 	return c.body
 }
 
-// GetQueryString get sse client request queryString
-func (c *Client) GetQueryString() string {
-	return c.queryString
-}
-
-// GetContentType get sse client request contentType
-func (c *Client) GetContentType() []byte {
-	return c.contentType
-}
-
-// GetMultipartFormData get sse client request multipartFormData
-func (c *Client) GetMultipartFormData() map[string]string {
-	return c.multipartFormData
-}
-
-// GetFormData get sse client request formData
-func (c *Client) GetFormData() map[string]string {
-	return c.formData
-}
-
 // GetLastEventID get sse client lastEventID
 func (c *Client) GetLastEventID() []byte {
 	return c.lastEventID.Load().([]byte)
@@ -305,18 +261,7 @@ func (c *Client) request(ctx context.Context, req *protocol.Request, resp *proto
 	if len(c.body) != 0 {
 		req.SetBody(c.body)
 	}
-	if len(c.queryString) != 0 {
-		req.SetQueryString(c.queryString)
-	}
-	if len(c.contentType) != 0 {
-		req.Header.SetContentTypeBytes(c.contentType)
-	}
-	if len(c.multipartFormData) != 0 {
-		req.SetMultipartFormData(c.multipartFormData)
-	}
-	if len(c.formData) != 0 {
-		req.SetFormData(c.formData)
-	}
+
 	err := c.hertzClient.Do(ctx, req, resp)
 	return err
 }
