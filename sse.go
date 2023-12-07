@@ -95,7 +95,7 @@ func NewStream(c *app.RequestContext) *Stream {
 	}
 }
 
-// Publish push an event to client.
+// Publish push an event to client. If error is returned, you need to stop 'publish'.
 func (c *Stream) Publish(event *Event) error {
 	err := Encode(c.w, event)
 	if err != nil {
