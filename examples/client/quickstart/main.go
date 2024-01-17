@@ -38,11 +38,11 @@ package main
 
 import (
 	"context"
-	"sync"
-
-	"github.com/hertz-contrib/sse"
-
+	"fmt"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/hertz-contrib/sse"
+	"sync"
+	"time"
 )
 
 var wg sync.WaitGroup
@@ -64,14 +64,20 @@ func main() {
 
 		events := make(chan *sse.Event)
 		errChan := make(chan error)
+		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
-			cErr := c.Subscribe(func(msg *sse.Event) {
+			cErr := c.SubscribeWithContext(ctx, func(msg *sse.Event) {
 				if msg.Data != nil {
 					events <- msg
 					return
 				}
 			})
 			errChan <- cErr
+		}()
+		go func() {
+			time.Sleep(5 * time.Second)
+			cancel()
+			fmt.Println("client1 subscribe cancel")
 		}()
 		for {
 			select {

@@ -40,6 +40,7 @@ package sse
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 )
 
@@ -119,10 +120,15 @@ func minPosInt(a, b int) int {
 }
 
 // ReadEvent scans the EventStream for events.
-func (e *EventStreamReader) ReadEvent() ([]byte, error) {
+func (e *EventStreamReader) ReadEvent(ctx context.Context) ([]byte, error) {
 	if e.scanner.Scan() {
-		event := e.scanner.Bytes()
-		return event, nil
+		select {
+		case <-ctx.Done():
+			return nil, io.EOF
+		default:
+			event := e.scanner.Bytes()
+			return event, nil
+		}
 	}
 	if err := e.scanner.Err(); err != nil {
 		return nil, err

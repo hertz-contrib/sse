@@ -156,7 +156,7 @@ func main() {
     }
   }()
 
-  select {}
+  wg.Wait()
 }
 
 ```

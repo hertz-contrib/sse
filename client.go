@@ -124,7 +124,7 @@ func (c *Client) startReadLoop(ctx context.Context, reader *EventStreamReader) (
 func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh chan *Event, erChan chan error) {
 	for {
 		// Read each new line and process the type of event
-		event, err := reader.ReadEvent()
+		event, err := reader.ReadEvent(ctx)
 		if err != nil {
 			if err == io.EOF {
 				erChan <- nil
