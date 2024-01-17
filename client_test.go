@@ -212,6 +212,7 @@ func TestClientUnSubscribe(t *testing.T) {
 				return
 			}
 		})
+		assert.Nil(t, cErr)
 	}()
 	cancel()
 	time.Sleep(5 * time.Second)
@@ -219,8 +220,6 @@ func TestClientUnSubscribe(t *testing.T) {
 		_, err := wait(events, time.Second*1)
 		assert.DeepEqual(t, errors.New("timeout"), err)
 	}
-
-	assert.Nil(t, cErr)
 }
 
 func TestClientSubscribeMultiline(t *testing.T) {
