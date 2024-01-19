@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 CloudWeGo Authors
+ * Copyright 2024 CloudWeGo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,6 +195,31 @@ func TestClientSubscribe(t *testing.T) {
 	}
 
 	assert.Nil(t, cErr)
+}
+
+func TestClientUnSubscribe(t *testing.T) {
+	go newServer(false, "8887")
+	time.Sleep(time.Second)
+	c := NewClient("http://127.0.0.1:8887/sse")
+
+	events := make(chan *Event)
+	ctx, cancel := context.WithCancel(context.Background())
+	var cErr error
+	go func() {
+		cErr = c.SubscribeWithContext(ctx, func(msg *Event) {
+			if msg.Data != nil {
+				events <- msg
+				return
+			}
+		})
+		assert.Nil(t, cErr)
+	}()
+	cancel()
+	time.Sleep(5 * time.Second)
+	for i := 0; i < 5; i++ {
+		_, err := wait(events, time.Second*1)
+		assert.DeepEqual(t, errors.New("timeout"), err)
+	}
 }
 
 func TestClientSubscribeMultiline(t *testing.T) {

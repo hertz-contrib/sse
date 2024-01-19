@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 CloudWeGo Authors
+ * Copyright 2024 CloudWeGo Authors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ package sse
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"io"
 )
 
@@ -119,10 +120,15 @@ func minPosInt(a, b int) int {
 }
 
 // ReadEvent scans the EventStream for events.
-func (e *EventStreamReader) ReadEvent() ([]byte, error) {
+func (e *EventStreamReader) ReadEvent(ctx context.Context) ([]byte, error) {
 	if e.scanner.Scan() {
-		event := e.scanner.Bytes()
-		return event, nil
+		select {
+		case <-ctx.Done():
+			return nil, io.EOF
+		default:
+			event := e.scanner.Bytes()
+			return event, nil
+		}
 	}
 	if err := e.scanner.Err(); err != nil {
 		return nil, err
