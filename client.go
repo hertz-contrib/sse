@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"encoding/binary"
 	"fmt"
 	"io"
+	"strconv"
 	"sync/atomic"
 
 	"github.com/cloudwego/hertz/pkg/network/standard"
@@ -288,7 +288,10 @@ func (c *Client) processEvent(msg []byte) (event *Event, err error) {
 		case bytes.HasPrefix(line, headerEvent):
 			e.Event = string(append([]byte(nil), trimHeader(len(headerEvent), line)...))
 		case bytes.HasPrefix(line, headerRetry):
-			e.Retry = binary.BigEndian.Uint64(append([]byte(nil), trimHeader(len(headerRetry), line)...))
+			e.Retry, err = strconv.ParseUint(b2s(append([]byte(nil), trimHeader(len(headerRetry), line)...)), 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("process message `retry` failed, err is %s", err)
+			}
 		default:
 			// Ignore any garbage that doesn't match what we're looking for.
 		}
