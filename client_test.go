@@ -148,7 +148,7 @@ func publishMsgs(s *Stream, empty bool, count int) {
 		if empty {
 			s.Publish(&Event{Data: []byte("\n")})
 		} else {
-			s.Publish(&Event{Data: []byte("ping")})
+			s.Publish(&Event{Data: []byte("ping"), Retry: uint64(3000), Event: "test", ID: "1111"})
 		}
 	}
 }
