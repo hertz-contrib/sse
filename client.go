@@ -29,6 +29,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/protocol"
+	do "github.com/cloudwego/hertz/pkg/protocol/client"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 )
 
@@ -47,7 +48,7 @@ type ResponseCallback func(ctx context.Context, req *protocol.Request, resp *pro
 
 // Client handles an incoming server stream
 type Client struct {
-	hertzClient        *client.Client
+	hertzClient        do.Doer
 	disconnectCallback ConnCallback
 	connectedCallback  ConnCallback
 	responseCallback   ResponseCallback
@@ -202,7 +203,7 @@ func (c *Client) SetResponseCallback(responseCallback ResponseCallback) {
 }
 
 // SetHertzClient set sse client
-func (c *Client) SetHertzClient(hertzClient *client.Client) {
+func (c *Client) SetHertzClient(hertzClient do.Doer) {
 	c.hertzClient = hertzClient
 }
 
@@ -227,7 +228,7 @@ func (c *Client) GetMethod() string {
 }
 
 // GetHertzClient get sse client
-func (c *Client) GetHertzClient() *client.Client {
+func (c *Client) GetHertzClient() do.Doer {
 	return c.hertzClient
 }
 
