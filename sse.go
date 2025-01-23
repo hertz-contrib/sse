@@ -83,12 +83,17 @@ type Stream struct {
 
 // NewStream creates a new stream for publishing Event.
 func NewStream(c *app.RequestContext) *Stream {
+	writer := resp.NewChunkedBodyWriter(&c.Response, c.GetWriter())
+	return NewStreamWithWriter(c, writer)
+}
+
+// NewStreamWithWriter creates a new stream with customize network.ExtWriter for publishing Event.
+func NewStreamWithWriter(c *app.RequestContext, writer network.ExtWriter) *Stream {
 	c.Response.Header.SetContentType(ContentType)
 	if c.Response.Header.Get(cacheControl) == "" {
 		c.Response.Header.Set(cacheControl, noCache)
 	}
 
-	writer := resp.NewChunkedBodyWriter(&c.Response, c.GetWriter())
 	c.Response.HijackWriter(writer)
 	return &Stream{
 		writer,
