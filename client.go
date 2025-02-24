@@ -318,31 +318,6 @@ func (c *Client) GetLastEventID() []byte {
 	return c.lastEventID.Load().([]byte)
 }
 
-func (c *Client) request(ctx context.Context, req *protocol.Request, resp *protocol.Response) error {
-	req.SetMethod(c.method)
-	req.SetRequestURI(c.url)
-
-	req.Header.Set("Cache-Control", "no-cache")
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Connection", "keep-alive")
-
-	lastID, exists := c.lastEventID.Load().([]byte)
-	if exists && lastID != nil {
-		req.Header.Set(LastEventID, string(lastID))
-	}
-	// Add user specified headers
-	for k, v := range c.headers {
-		req.Header.Set(k, v)
-	}
-
-	if len(c.body) != 0 {
-		req.SetBody(c.body)
-	}
-
-	err := c.hertzClient.Do(ctx, req, resp)
-	return err
-}
-
 func (c *Client) processEvent(msg []byte) (event *Event, err error) {
 	var e Event
 
