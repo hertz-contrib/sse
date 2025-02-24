@@ -422,7 +422,6 @@ func TestClientOnConnect(t *testing.T) {
 			assert.DeepEqual(t, struct{}{}, <-called)
 		})
 	}
-
 }
 
 func TestClientUnsubscribe401(t *testing.T) {
