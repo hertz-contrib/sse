@@ -289,8 +289,15 @@ func TestClientUnSubscribe(t *testing.T) {
 				}, sopts...)
 				assert.Nil(t, cErr)
 			}()
+			time.Sleep(1 * time.Second)
 			cancel()
-			time.Sleep(5 * time.Second)
+			time.Sleep(1 * time.Second)
+
+			// read data that already published into channel
+			_, _ = wait(events, time.Second*1)
+			_, _ = wait(events, time.Second*1)
+
+			// there is no event send to channel after calling cancel()
 			for i := 0; i < 5; i++ {
 				_, err := wait(events, time.Second*1)
 				assert.DeepEqual(t, errors.New("timeout"), err)
