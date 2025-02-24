@@ -65,6 +65,7 @@ type Client struct {
 var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()), client.WithResponseBodyStream(true))
 
 // NewClient creates a new client
+// deprecated, pls use NewClientWithOptions
 func NewClient(url string) *Client {
 	c := &Client{
 		url:           url,
@@ -77,22 +78,67 @@ func NewClient(url string) *Client {
 	return c
 }
 
+// NewClientWithOptions creates a new Client with specified ClientOption
+func NewClientWithOptions(opts ...ClientOption) (*Client, error) {
+	options := ClientOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	var cliIntf do.Doer
+	if options.hertzCli != nil {
+		cliIntf = options.hertzCli
+	} else {
+		cliIntf = defaultClient
+	}
+	// SSE must use the streaming read functionality
+	if hertzCli, ok := cliIntf.(*client.Client); ok {
+		hertzCli.GetOptions().ResponseBodyStream = true
+	}
+
+	c := &Client{
+		hertzClient:   cliIntf,
+		headers:       make(map[string]string),
+		maxBufferSize: 1 << 16,
+	}
+
+	return c, nil
+}
+
 // Subscribe to a data stream
-func (c *Client) Subscribe(handler func(msg *Event)) error {
-	return c.SubscribeWithContext(context.Background(), handler)
+func (c *Client) Subscribe(handler func(msg *Event), opts ...SubscribeOption) error {
+	return c.SubscribeWithContext(context.Background(), handler, opts...)
 }
 
 // SubscribeWithContext to a data stream with context
-func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Event)) error {
-	req, resp := protocol.AcquireRequest(), protocol.AcquireResponse()
-	err := c.request(ctx, req, resp)
-	if err != nil {
-		return err
+func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Event), opts ...SubscribeOption) (err error) {
+	options := SubscribeOptions{}
+	for _, opt := range opts {
+		opt(&options)
 	}
+
+	var req *protocol.Request
+	var needReleaseReq bool
+	if options.req != nil {
+		// req set by WithRequest has higher priority
+		req = options.req
+	} else {
+		req = protocol.AcquireRequest()
+		c.initRequestForCompatibility(req)
+		needReleaseReq = true
+	}
+	initSSERequest(req)
+	resp := protocol.AcquireResponse()
 	defer func() {
-		protocol.ReleaseRequest(req)
+		if needReleaseReq {
+			protocol.ReleaseRequest(req)
+		}
 		protocol.ReleaseResponse(resp)
 	}()
+
+	if err = c.hertzClient.Do(ctx, req, resp); err != nil {
+		return err
+	}
 	if Callback := c.responseCallback; Callback != nil {
 		err = Callback(ctx, req, resp)
 		if err != nil {
@@ -112,6 +158,32 @@ func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Eve
 		case msg := <-eventChan:
 			handler(msg)
 		}
+	}
+}
+
+// initRequestForCompatibility inits req by the client's settings if users do not use WithRequest
+func (c *Client) initRequestForCompatibility(req *protocol.Request) {
+	req.SetMethod(c.method)
+	req.SetRequestURI(c.url)
+	// Add user specified headers
+	for k, v := range c.headers {
+		req.Header.Set(k, v)
+	}
+
+	if len(c.body) != 0 {
+		req.SetBody(c.body)
+	}
+}
+
+// initSSERequest sets the attributes necessary for SSE
+func initSSERequest(req *protocol.Request) {
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Connection", "keep-alive")
+	// if method is not set by WithRequest or client.SetMethod
+	// using GET by default
+	if len(req.Method()) <= 0 {
+		req.SetMethod(consts.MethodGet)
 	}
 }
 
@@ -178,21 +250,25 @@ func (c *Client) SetMaxBufferSize(size int) {
 }
 
 // SetURL set sse client url
+// Deprecated, set in protocol.Request and use WithRequest instead
 func (c *Client) SetURL(url string) {
 	c.url = url
 }
 
 // SetBody set sse client request body
+// Deprecated, set in protocol.Request and use WithRequest instead
 func (c *Client) SetBody(body []byte) {
 	c.body = body
 }
 
 // SetMethod set sse client request method
+// Deprecated, set in protocol.Request and use WithRequest instead
 func (c *Client) SetMethod(method string) {
 	c.method = method
 }
 
 // SetHeaders set sse client headers
+// Deprecated, set in protocol.Request and use WithRequest instead
 func (c *Client) SetHeaders(headers map[string]string) {
 	c.headers = headers
 }
