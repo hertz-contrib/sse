@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/cloudwego/hertz/pkg/common/config"
 	"github.com/cloudwego/hertz/pkg/network/standard"
 
 	"github.com/cloudwego/hertz/pkg/app/client"
@@ -92,8 +93,8 @@ func NewClientWithOptions(opts ...ClientOption) (*Client, error) {
 		cliIntf = defaultClient
 	}
 	// SSE must use the streaming read functionality
-	if hertzCli, ok := cliIntf.(*client.Client); ok {
-		hertzCli.GetOptions().ResponseBodyStream = true
+	if optionsGetter, ok := cliIntf.(interface{ GetOptions() *config.ClientOptions }); ok {
+		optionsGetter.GetOptions().ResponseBodyStream = true
 	}
 
 	c := &Client{
