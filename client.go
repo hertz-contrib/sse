@@ -57,7 +57,6 @@ type Client struct {
 	url                string
 	method             string
 	maxBufferSize      int
-	connected          bool
 	encodingBase64     bool
 	lastEventID        atomic.Value // []byte
 	body               []byte
@@ -196,6 +195,7 @@ func (c *Client) startReadLoop(ctx context.Context, reader *EventStreamReader) (
 }
 
 func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh chan *Event, erChan chan error) {
+	var connected bool
 	for {
 		// Read each new line and process the type of event
 		event, err := reader.ReadEvent(ctx)
@@ -206,15 +206,14 @@ func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh 
 			}
 			// run user specified disconnect function
 			if c.disconnectCallback != nil {
-				c.connected = false
 				c.disconnectCallback(ctx, c)
 			}
 			erChan <- err
 			return
 		}
 
-		if !c.connected && c.connectedCallback != nil {
-			c.connected = true
+		if !connected && c.connectedCallback != nil {
+			connected = true
 			c.connectedCallback(ctx, c)
 		}
 
@@ -280,6 +279,7 @@ func (c *Client) SetResponseCallback(responseCallback ResponseCallback) {
 }
 
 // SetHertzClient set sse client
+// Deprecated, set in NewClientWithOptions(WithHertzClient(hCli))
 func (c *Client) SetHertzClient(hertzClient do.Doer) {
 	c.hertzClient = hertzClient
 }
@@ -290,31 +290,39 @@ func (c *Client) SetEncodingBase64(encodingBase64 bool) {
 }
 
 // GetURL get sse client url
+// Deprecated
 func (c *Client) GetURL() string {
 	return c.url
 }
 
 // GetHeaders get sse client headers
+// Deprecated
 func (c *Client) GetHeaders() map[string]string {
 	return c.headers
 }
 
 // GetMethod get sse client method
+// Deprecated
 func (c *Client) GetMethod() string {
 	return c.method
 }
 
 // GetHertzClient get sse client
+// Deprecated
 func (c *Client) GetHertzClient() do.Doer {
 	return c.hertzClient
 }
 
 // GetBody get sse client request body
+// Deprecated
 func (c *Client) GetBody() []byte {
 	return c.body
 }
 
 // GetLastEventID get sse client lastEventID
+// Deprecated
+// If you use a Client to initiate multiple SSE requests,
+// the results returned by GetLastEventID do not identify which SSE request belongs to
 func (c *Client) GetLastEventID() []byte {
 	return c.lastEventID.Load().([]byte)
 }

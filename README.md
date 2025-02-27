@@ -121,12 +121,12 @@ func main() {
 
 		// touch off when connected to the server
 		c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client1 connect to server %s success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client1 connect to server success")
 		})
 
 		// touch off when the connection is shutdown
 		c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client1 disconnect to server %s success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client1 disconnect to server success")
 		})
 
 		events := make(chan *sse.Event)
@@ -181,12 +181,12 @@ func main() {
 
 		// touch off when connected to the server
 		c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client2 %s connect to server success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client2 connect to server success")
 		})
 
 		// touch off when the connection is shutdown
 		c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client2 %s disconnect to server success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client2 disconnect to server success")
 		})
 
 		events := make(chan *sse.Event, 10)

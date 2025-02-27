@@ -22,6 +22,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -214,24 +215,33 @@ func TestClientSubscribe(t *testing.T) {
 				sopts = append(sopts, WithRequest(req))
 			}
 
-			events := make(chan *Event)
-			var cErr error
-			go func() {
-				cErr = cli.Subscribe(func(msg *Event) {
-					if msg.Data != nil {
-						events <- msg
-						return
+			// running multiple SSE requests concurrently
+			var wg sync.WaitGroup
+			for i := 0; i < 3; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					events := make(chan *Event)
+					var cErr error
+					go func() {
+						cErr = cli.Subscribe(func(msg *Event) {
+							if msg.Data != nil {
+								events <- msg
+								return
+							}
+						}, sopts...)
+					}()
+
+					for i := 0; i < 5; i++ {
+						msg, err := wait(events, time.Second*1)
+						assert.Nil(t, err)
+						assert.DeepEqual(t, []byte(`ping`), msg)
 					}
-				}, sopts...)
-			}()
 
-			for i := 0; i < 5; i++ {
-				msg, err := wait(events, time.Second*1)
-				assert.Nil(t, err)
-				assert.DeepEqual(t, []byte(`ping`), msg)
+					assert.Nil(t, cErr)
+				}()
 			}
-
-			assert.Nil(t, cErr)
+			wg.Wait()
 		})
 	}
 }
