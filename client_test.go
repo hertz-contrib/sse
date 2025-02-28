@@ -207,13 +207,7 @@ func TestClientSubscribe(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.desc, func(t *testing.T) {
-			var req *protocol.Request
-			var sopts []SubscribeOption
 			cli := test.newCli(t)
-			if test.newReq != nil {
-				req = test.newReq()
-				sopts = append(sopts, WithRequest(req))
-			}
 
 			// running multiple SSE requests concurrently
 			var wg sync.WaitGroup
@@ -224,6 +218,12 @@ func TestClientSubscribe(t *testing.T) {
 					events := make(chan *Event)
 					var cErr error
 					go func() {
+						var req *protocol.Request
+						var sopts []SubscribeOption
+						if test.newReq != nil {
+							req = test.newReq()
+							sopts = append(sopts, WithRequest(req))
+						}
 						cErr = cli.Subscribe(func(msg *Event) {
 							if msg.Data != nil {
 								events <- msg
