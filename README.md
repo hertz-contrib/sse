@@ -90,129 +90,160 @@ see: [examples/client/quickstart/main.go](examples/client/quickstart/main.go)
 package main
 
 import (
-  "context"
-  "sync"
-  "time"
+	"context"
+	"sync"
+	"time"
 
-  "github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/cloudwego/hertz/pkg/app/client"
+	"github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/cloudwego/hertz/pkg/protocol"
 
-  "github.com/hertz-contrib/sse"
+	"github.com/hertz-contrib/sse"
 )
 
 var wg sync.WaitGroup
 
 func main() {
-  wg.Add(2)
-  go func() {
-    c := sse.NewClient("http://127.0.0.1:8888/sse")
+	wg.Add(2)
+	go func() {
+		// create Hertz client 
+		hCli, err := client.NewClient()
+		if err != nil {
+			hlog.Errorf("create Hertz client failed, err: %v", err)
+			return
+		}
+		// inject Hertz client to create SSE client
+		c, err := sse.NewClientWithOptions(sse.WithHertzClient(hCli))
+		if err != nil {
+			hlog.Errorf("create SSE client failed, err: %v", err)
+			return
+		}
 
-    // touch off when connected to the server
-    c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client1 connect to server %s success with %s method", c.GetURL(), c.GetMethod())
-    })
+		// touch off when connected to the server
+		c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client1 connect to server success")
+		})
 
-    // touch off when the connection is shutdown
-    c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client1 disconnect to server %s success with %s method", c.GetURL(), c.GetMethod())
-    })
+		// touch off when the connection is shutdown
+		c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client1 disconnect to server success")
+		})
 
-    events := make(chan *sse.Event)
-    errChan := make(chan error)
-    ctx, cancel := context.WithCancel(context.Background())
-    go func() {
-      cErr := c.SubscribeWithContext(ctx, func(msg *sse.Event) {
-        if msg.Data != nil {
-          events <- msg
-          return
-        }
-      })
-      errChan <- cErr
-    }()
-    go func() {
-      time.Sleep(5 * time.Second)
-      cancel()
-      hlog.Info("client1 subscribe cancel")
-    }()
-    for {
-      select {
-      case e := <-events:
-        hlog.Infof("client1, %+v", e)
-      case err := <-errChan:
-        if err == nil {
-          hlog.Info("client1, ctx done, read stop")
-        } else {
-          hlog.CtxErrorf(ctx, "client1, err = %s", err.Error())
-        }
-        wg.Done()
-        return
-      }
-    }
-  }()
+		events := make(chan *sse.Event)
+		errChan := make(chan error)
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			// build the req sent with each SSE request	
+			req := &protocol.Request{}
+			req.SetRequestURI("http://127.0.0.1:8888/sse")
+			cErr := c.SubscribeWithContext(ctx, func(msg *sse.Event) {
+				if msg.Data != nil {
+					events <- msg
+					return
+				}
+			}, sse.WithRequest(req))
+			errChan <- cErr
+		}()
+		go func() {
+			time.Sleep(5 * time.Second)
+			cancel()
+			hlog.Info("client1 subscribe cancel")
+		}()
+		for {
+			select {
+			case e := <-events:
+				hlog.Infof("client1, %+v", e)
+			case err := <-errChan:
+				if err == nil {
+					hlog.Info("client1, ctx done, read stop")
+				} else {
+					hlog.CtxErrorf(ctx, "client1, err = %s", err.Error())
+				}
+				wg.Done()
+				return
+			}
+		}
+	}()
 
-  go func() {
-    c := sse.NewClient("http://127.0.0.1:8888/sse")
+	go func() {
+		// create Hertz client 
+		hCli, err := client.NewClient()
+		if err != nil {
+			hlog.Errorf("create Hertz client failed, err: %v", err)
+			return
+		}
+		// inject Hertz client to create SSE client
+		c, err := sse.NewClientWithOptions(sse.WithHertzClient(hCli))
+		if err != nil {
+			hlog.Errorf("create SSE client failed, err: %v", err)
+			return
+		}
 
-    // touch off when connected to the server
-    c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client2 %s connect to server success with %s method", c.GetURL(), c.GetMethod())
-    })
+		// touch off when connected to the server
+		c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client2 connect to server success")
+		})
 
-    // touch off when the connection is shutdown
-    c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client2 %s disconnect to server success with %s method", c.GetURL(), c.GetMethod())
-    })
+		// touch off when the connection is shutdown
+		c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client2 disconnect to server success")
+		})
 
-    events := make(chan *sse.Event, 10)
-    errChan := make(chan error)
-    go func() {
-      cErr := c.Subscribe(func(msg *sse.Event) {
-        if msg.Data != nil {
-          events <- msg
-          return
-        }
-      })
-      errChan <- cErr
-    }()
+		events := make(chan *sse.Event, 10)
+		errChan := make(chan error)
+		go func() {
+			// build the req sent with each SSE request	
+			req := &protocol.Request{}
+			req.SetRequestURI("http://127.0.0.1:8888/sse")
+			cErr := c.Subscribe(func(msg *sse.Event) {
+				if msg.Data != nil {
+					events <- msg
+					return
+				}
+			}, sse.WithRequest(req))
+			errChan <- cErr
+		}()
 
-    streamClosed := false
-    for {
-      select {
-      case e := <-events:
-        hlog.Infof("client2, %+v", e)
-        time.Sleep(2 * time.Second) // do something blocked
-        // When the event ends, you should break out of the loop.
-        if checkEventEnd(e) {
-          wg.Done()
-          return
-        }
-      case err := <-errChan:
-        if err == nil {
-          // err is nil means read io.EOF, stream is closed
-          streamClosed = true
-          hlog.Info("client2, stream closed")
-          // continue read channel events
-          continue
-        }
-        hlog.CtxErrorf(context.Background(), "client2, err = %s", err.Error())
-        wg.Done()
-        return
-      default:
-        if streamClosed {
-          hlog.Info("client2, events is empty and stream closed")
-          wg.Done()
-          return
-        }
-      }
-    }
-  }()
+		streamClosed := false
+		for {
+			select {
+			case e := <-events:
+				hlog.Infof("client2, %+v", e)
+				time.Sleep(2 * time.Second) // do something blocked
+				// When the event ends, you should break out of the loop.
+				if checkEventEnd(e) {
+					wg.Done()
+					return
+				}
+			case err := <-errChan:
+				if err == nil {
+					// err is nil means read io.EOF, stream is closed
+					streamClosed = true
+					hlog.Info("client2, stream closed")
+					// continue read channel events
+					continue
+				}
+				hlog.CtxErrorf(context.Background(), "client2, err = %s", err.Error())
+				wg.Done()
+				return
+			default:
+				if streamClosed {
+					hlog.Info("client2, events is empty and stream closed")
+					wg.Done()
+					return
+				}
+			}
+		}
+	}()
 
-  wg.Wait()
+	wg.Wait()
 }
 
 func checkEventEnd(e *sse.Event) bool {
-  // check e.Data or e.Event. It depends on the definition of the server
-  return e.Event == "end" || string(e.Data) == "end flag"
+	// check e.Data or e.Event. It depends on the definition of the server
+	return e.Event == "end" || string(e.Data) == "end flag"
 }
+
 ```
 
 ## Real-world examples

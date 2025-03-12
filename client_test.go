@@ -22,9 +22,14 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/cloudwego/hertz/pkg/app/client"
+	"github.com/cloudwego/hertz/pkg/common/config"
+	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -175,113 +180,311 @@ func wait(ch chan *Event, duration time.Duration) ([]byte, error) {
 func TestClientSubscribe(t *testing.T) {
 	go newServer(false, "8886")
 	time.Sleep(time.Second)
-	c := NewClient("http://127.0.0.1:8886/sse")
-
-	events := make(chan *Event)
-	var cErr error
-	go func() {
-		cErr = c.Subscribe(func(msg *Event) {
-			if msg.Data != nil {
-				events <- msg
-				return
-			}
-		})
-	}()
-
-	for i := 0; i < 5; i++ {
-		msg, err := wait(events, time.Second*1)
-		assert.Nil(t, err)
-		assert.DeepEqual(t, []byte(`ping`), msg)
+	tests := []struct {
+		desc   string
+		newCli func(t *testing.T) *Client
+		newReq func() *protocol.Request
+	}{
+		{
+			desc: "old interface",
+			newCli: func(t *testing.T) *Client {
+				return NewClient("http://127.0.0.1:8886/sse")
+			},
+		},
+		{
+			desc: "new interface",
+			newCli: func(t *testing.T) *Client {
+				hertzCli, err := client.NewClient()
+				assert.Nil(t, err)
+				cli, err := NewClientWithOptions(WithHertzClient(hertzCli))
+				assert.Nil(t, err)
+				return cli
+			},
+			newReq: func() *protocol.Request {
+				req := &protocol.Request{}
+				req.SetRequestURI("http://127.0.0.1:8886/sse")
+				return req
+			},
+		},
 	}
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			cli := test.newCli(t)
 
-	assert.Nil(t, cErr)
+			// running multiple SSE requests concurrently
+			var wg sync.WaitGroup
+			for i := 0; i < 3; i++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					events := make(chan *Event)
+					var cErr error
+					go func() {
+						var req *protocol.Request
+						var sopts []SubscribeOption
+						if test.newReq != nil {
+							req = test.newReq()
+							sopts = append(sopts, WithRequest(req))
+						}
+						cErr = cli.Subscribe(func(msg *Event) {
+							if msg.Data != nil {
+								events <- msg
+								return
+							}
+						}, sopts...)
+					}()
+
+					for i := 0; i < 5; i++ {
+						msg, err := wait(events, time.Second*1)
+						assert.Nil(t, err)
+						assert.DeepEqual(t, []byte(`ping`), msg)
+					}
+
+					assert.Nil(t, cErr)
+				}()
+			}
+			wg.Wait()
+		})
+	}
 }
 
 func TestClientUnSubscribe(t *testing.T) {
 	go newServer(false, "8887")
 	time.Sleep(time.Second)
-	c := NewClient("http://127.0.0.1:8887/sse")
+	tests := []struct {
+		desc   string
+		newCli func(t *testing.T) *Client
+		newReq func() *protocol.Request
+	}{
+		{
+			desc: "old interface",
+			newCli: func(t *testing.T) *Client {
+				return NewClient("http://127.0.0.1:8887/sse")
+			},
+		},
+		{
+			desc: "new interface",
+			newCli: func(t *testing.T) *Client {
+				hertzCli, err := client.NewClient()
+				assert.Nil(t, err)
+				cli, err := NewClientWithOptions(WithHertzClient(hertzCli))
+				assert.Nil(t, err)
+				return cli
+			},
+			newReq: func() *protocol.Request {
+				req := &protocol.Request{}
+				req.SetRequestURI("http://127.0.0.1:8887/sse")
+				return req
+			},
+		},
+	}
 
-	events := make(chan *Event)
-	ctx, cancel := context.WithCancel(context.Background())
-	var cErr error
-	go func() {
-		cErr = c.SubscribeWithContext(ctx, func(msg *Event) {
-			if msg.Data != nil {
-				events <- msg
-				return
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			var req *protocol.Request
+			var sopts []SubscribeOption
+			cli := test.newCli(t)
+			if test.newReq != nil {
+				req = test.newReq()
+				sopts = append(sopts, WithRequest(req))
+			}
+
+			events := make(chan *Event)
+			ctx, cancel := context.WithCancel(context.Background())
+			var cErr error
+			go func() {
+				cErr = cli.SubscribeWithContext(ctx, func(msg *Event) {
+					if msg.Data != nil {
+						events <- msg
+						return
+					}
+				}, sopts...)
+				assert.Nil(t, cErr)
+			}()
+			time.Sleep(1 * time.Second)
+			cancel()
+			time.Sleep(1 * time.Second)
+
+			// read data that already published into channel
+			_, _ = wait(events, time.Second*1)
+			_, _ = wait(events, time.Second*1)
+
+			// there is no event send to channel after calling cancel()
+			for i := 0; i < 5; i++ {
+				_, err := wait(events, time.Second*1)
+				assert.DeepEqual(t, errors.New("timeout"), err)
 			}
 		})
-		assert.Nil(t, cErr)
-	}()
-	time.Sleep(1 * time.Second)
-	cancel()
-	time.Sleep(1 * time.Second)
-
-	// read data that already published into channel
-	_, _ = wait(events, time.Second*1)
-	_, _ = wait(events, time.Second*1)
-
-	// there is no event send to channel after calling cancel()
-	for i := 0; i < 5; i++ {
-		_, err := wait(events, time.Second*1)
-		assert.DeepEqual(t, errors.New("timeout"), err)
 	}
 }
 
 func TestClientSubscribeMultiline(t *testing.T) {
 	go newMultilineServer("9007")
 	time.Sleep(time.Second)
-	c := NewClient("http://127.0.0.1:9007/sse")
-
-	events := make(chan *Event)
-	var cErr error
-
-	go func() {
-		cErr = c.Subscribe(func(msg *Event) {
-			if msg.Data != nil {
-				events <- msg
-				return
-			}
-		})
-	}()
-
-	for i := 0; i < 5; i++ {
-		msg, err := wait(events, time.Second*1)
-		assert.Nil(t, err)
-		assert.DeepEqual(t, []byte(mldata), msg)
+	tests := []struct {
+		desc   string
+		newCli func(t *testing.T) *Client
+		newReq func() *protocol.Request
+	}{
+		{
+			desc: "old interface",
+			newCli: func(t *testing.T) *Client {
+				return NewClient("http://127.0.0.1:9007/sse")
+			},
+		},
+		{
+			desc: "new interface",
+			newCli: func(t *testing.T) *Client {
+				hertzCli, err := client.NewClient()
+				assert.Nil(t, err)
+				cli, err := NewClientWithOptions(WithHertzClient(hertzCli))
+				assert.Nil(t, err)
+				return cli
+			},
+			newReq: func() *protocol.Request {
+				req := &protocol.Request{}
+				req.SetRequestURI("http://127.0.0.1:9007/sse")
+				return req
+			},
+		},
 	}
 
-	assert.Nil(t, cErr)
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			var req *protocol.Request
+			var sopts []SubscribeOption
+			cli := test.newCli(t)
+			if test.newReq != nil {
+				req = test.newReq()
+				sopts = append(sopts, WithRequest(req))
+			}
+
+			events := make(chan *Event)
+			var cErr error
+
+			go func() {
+				cErr = cli.Subscribe(func(msg *Event) {
+					if msg.Data != nil {
+						events <- msg
+						return
+					}
+				}, sopts...)
+			}()
+
+			for i := 0; i < 5; i++ {
+				msg, err := wait(events, time.Second*1)
+				assert.Nil(t, err)
+				assert.DeepEqual(t, []byte(mldata), msg)
+			}
+
+			assert.Nil(t, cErr)
+		})
+	}
 }
 
 func TestClientOnConnect(t *testing.T) {
 	go newServerOnConnect(false, "9000")
 	time.Sleep(time.Second)
-	c := NewClient("http://127.0.0.1:9000/sse")
+	tests := []struct {
+		desc   string
+		newCli func(t *testing.T) *Client
+		newReq func() *protocol.Request
+	}{
+		{
+			desc: "old interface",
+			newCli: func(t *testing.T) *Client {
+				return NewClient("http://127.0.0.1:9000/sse")
+			},
+		},
+		{
+			desc: "new interface",
+			newCli: func(t *testing.T) *Client {
+				hertzCli, err := client.NewClient()
+				assert.Nil(t, err)
+				cli, err := NewClientWithOptions(WithHertzClient(hertzCli))
+				assert.Nil(t, err)
+				return cli
+			},
+			newReq: func() *protocol.Request {
+				req := &protocol.Request{}
+				req.SetRequestURI("http://127.0.0.1:9000/sse")
+				return req
+			},
+		},
+	}
 
-	called := make(chan struct{})
-	c.SetOnConnectCallback(func(ctx context.Context, client *Client) {
-		called <- struct{}{}
-	})
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			var req *protocol.Request
+			var sopts []SubscribeOption
+			cli := test.newCli(t)
+			if test.newReq != nil {
+				req = test.newReq()
+				sopts = append(sopts, WithRequest(req))
+			}
 
-	go c.Subscribe(func(msg *Event) {})
+			called := make(chan struct{})
+			cli.SetOnConnectCallback(func(ctx context.Context, client *Client) {
+				called <- struct{}{}
+			})
 
-	time.Sleep(time.Second)
-	assert.DeepEqual(t, struct{}{}, <-called)
+			go cli.Subscribe(func(msg *Event) {}, sopts...)
+
+			time.Sleep(time.Second)
+			assert.DeepEqual(t, struct{}{}, <-called)
+		})
+	}
 }
 
 func TestClientUnsubscribe401(t *testing.T) {
 	go newServer401("9009")
 	time.Sleep(time.Second)
-	c := NewClient("http://127.0.0.1:9009/sse")
+	tests := []struct {
+		desc   string
+		newCli func(t *testing.T) *Client
+		newReq func() *protocol.Request
+	}{
+		{
+			desc: "old interface",
+			newCli: func(t *testing.T) *Client {
+				return NewClient("http://127.0.0.1:9009/sse")
+			},
+		},
+		{
+			desc: "new interface",
+			newCli: func(t *testing.T) *Client {
+				hertzCli, err := client.NewClient()
+				assert.Nil(t, err)
+				cli, err := NewClientWithOptions(WithHertzClient(hertzCli))
+				assert.Nil(t, err)
+				return cli
+			},
+			newReq: func() *protocol.Request {
+				req := &protocol.Request{}
+				req.SetRequestURI("http://127.0.0.1:9009/sse")
+				return req
+			},
+		},
+	}
 
-	err := c.Subscribe(func(ev *Event) {
-		// this shouldn't run
-		assert.False(t, true)
-	})
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			var req *protocol.Request
+			var sopts []SubscribeOption
+			cli := test.newCli(t)
+			if test.newReq != nil {
+				req = test.newReq()
+				sopts = append(sopts, WithRequest(req))
+			}
 
-	assert.NotNil(t, err)
+			err := cli.Subscribe(func(ev *Event) {
+				// this shouldn't run
+				assert.False(t, true)
+			}, sopts...)
+
+			assert.NotNil(t, err)
+		})
+	}
 }
 
 func TestClientLargeData(t *testing.T) {
@@ -290,21 +493,59 @@ func TestClientLargeData(t *testing.T) {
 	data = []byte(hex.EncodeToString(data))
 	go newServerBigData(data, "9005")
 	time.Sleep(time.Second)
-	c := NewClient("http://127.0.0.1:9005/sse")
+	tests := []struct {
+		desc   string
+		newCli func(t *testing.T) *Client
+		newReq func() *protocol.Request
+	}{
+		{
+			desc: "old interface",
+			newCli: func(t *testing.T) *Client {
+				return NewClient("http://127.0.0.1:9005/sse")
+			},
+		},
+		{
+			desc: "new interface",
+			newCli: func(t *testing.T) *Client {
+				hertzCli, err := client.NewClient()
+				assert.Nil(t, err)
+				cli, err := NewClientWithOptions(WithHertzClient(hertzCli))
+				assert.Nil(t, err)
+				return cli
+			},
+			newReq: func() *protocol.Request {
+				req := &protocol.Request{}
+				req.SetRequestURI("http://127.0.0.1:9005/sse")
+				return req
+			},
+		},
+	}
 
-	// limit retries to 3
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			var req *protocol.Request
+			var sopts []SubscribeOption
+			cli := test.newCli(t)
+			if test.newReq != nil {
+				req = test.newReq()
+				sopts = append(sopts, WithRequest(req))
+			}
 
-	ec := make(chan *Event, 1)
+			// limit retries to 3
 
-	go func() {
-		c.Subscribe(func(ev *Event) {
-			ec <- ev
+			ec := make(chan *Event, 1)
+
+			go func() {
+				cli.Subscribe(func(ev *Event) {
+					ec <- ev
+				}, sopts...)
+			}()
+
+			d, err := wait(ec, time.Second)
+			assert.Nil(t, err)
+			assert.DeepEqual(t, data, d)
 		})
-	}()
-
-	d, err := wait(ec, time.Second)
-	assert.Nil(t, err)
-	assert.DeepEqual(t, data, d)
+	}
 }
 
 func TestTrimHeader(t *testing.T) {
@@ -335,25 +576,116 @@ func TestTrimHeader(t *testing.T) {
 func TestRequestWithBody(t *testing.T) {
 	go newServerWithPOSTBody(false, "9006")
 	time.Sleep(time.Second)
-	c := NewClient("http://127.0.0.1:9006/sse")
-	c.SetMethod(consts.MethodPost)
-	c.body = []byte(`{"msg":"echo"}`)
-	events := make(chan *Event)
-	var cErr error
-	go func() {
-		cErr = c.Subscribe(func(msg *Event) {
-			if msg.Data != nil {
-				events <- msg
-				return
-			}
-		})
-	}()
-
-	for i := 0; i < 5; i++ {
-		msg, err := wait(events, time.Second*1)
-		assert.Nil(t, err)
-		assert.DeepEqual(t, []byte(`{"msg":"echo"}`), msg)
+	tests := []struct {
+		desc   string
+		newCli func(t *testing.T) *Client
+		newReq func() *protocol.Request
+	}{
+		{
+			desc: "old interface",
+			newCli: func(t *testing.T) *Client {
+				cli := NewClient("http://127.0.0.1:9006/sse")
+				cli.SetMethod(consts.MethodPost)
+				cli.SetBody([]byte(`{"msg":"echo"}`))
+				return cli
+			},
+		},
+		{
+			desc: "new interface",
+			newCli: func(t *testing.T) *Client {
+				hertzCli, err := client.NewClient()
+				assert.Nil(t, err)
+				cli, err := NewClientWithOptions(WithHertzClient(hertzCli))
+				assert.Nil(t, err)
+				return cli
+			},
+			newReq: func() *protocol.Request {
+				req := &protocol.Request{}
+				req.SetRequestURI("http://127.0.0.1:9006/sse")
+				req.SetMethod(consts.MethodPost)
+				req.SetBody([]byte(`{"msg":"echo"}`))
+				return req
+			},
+		},
 	}
 
-	assert.Nil(t, cErr)
+	for _, test := range tests {
+		t.Run(test.desc, func(t *testing.T) {
+			var req *protocol.Request
+			var sopts []SubscribeOption
+			cli := test.newCli(t)
+			if test.newReq != nil {
+				req = test.newReq()
+				sopts = append(sopts, WithRequest(req))
+			}
+
+			events := make(chan *Event)
+			var cErr error
+			go func() {
+				cErr = cli.Subscribe(func(msg *Event) {
+					if msg.Data != nil {
+						events <- msg
+						return
+					}
+				}, sopts...)
+			}()
+
+			for i := 0; i < 5; i++ {
+				msg, err := wait(events, time.Second*1)
+				assert.Nil(t, err)
+				assert.DeepEqual(t, []byte(`{"msg":"echo"}`), msg)
+			}
+
+			assert.Nil(t, cErr)
+		})
+	}
+}
+
+func TestNewClientWithOptions(t *testing.T) {
+	// do not inject hertz client
+	cli, err := NewClientWithOptions()
+	assert.Nil(t, err)
+	optsGetter, ok := cli.hertzClient.(interface{ GetOptions() *config.ClientOptions })
+	assert.True(t, ok)
+	opts := optsGetter.GetOptions()
+	assert.NotNil(t, opts)
+	assert.True(t, opts.ResponseBodyStream)
+
+	// inject hertz client
+	hCli, err := client.NewClient()
+	assert.Nil(t, err)
+	cli, err = NewClientWithOptions(WithHertzClient(hCli))
+	assert.Nil(t, err)
+	assert.DeepEqual(t, hCli, cli.hertzClient)
+	optsGetter, ok = cli.hertzClient.(interface{ GetOptions() *config.ClientOptions })
+	assert.True(t, ok)
+	opts = optsGetter.GetOptions()
+	assert.NotNil(t, opts)
+	// NewClientWithOptions would configure ResponseBodyStream dynamically
+	assert.True(t, opts.ResponseBodyStream)
+}
+
+type mockHertzClient struct {
+	t            *testing.T
+	expectMethod string
+}
+
+func (m *mockHertzClient) Do(ctx context.Context, req *protocol.Request, resp *protocol.Response) error {
+	assert.DeepEqual(m.t, m.expectMethod, string(req.Method()))
+	resp.Header = protocol.ResponseHeader{}
+	resp.SetStatusCode(http.StatusOK)
+	// inject empty reader so that the BodyStream could return io.EOF directly
+	resp.SetBodyStream(strings.NewReader(""), 0)
+	return nil
+}
+
+func TestWithRequest(t *testing.T) {
+	cli, err := NewClientWithOptions(WithHertzClient(&mockHertzClient{t: t, expectMethod: consts.MethodGet}))
+	assert.Nil(t, err)
+	cli.SetMethod(consts.MethodPost)
+	// req configured by WithRequest has higher priority
+	req := &protocol.Request{}
+	req.SetMethod(consts.MethodGet)
+	err = cli.SubscribeWithContext(context.Background(), nil, WithRequest(req))
+	assert.Nil(t, err)
 }
