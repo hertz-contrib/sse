@@ -137,7 +137,7 @@ func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Eve
 	}()
 
 	if err = c.hertzClient.Do(ctx, req, resp); err != nil {
-		return err
+		return fmt.Errorf("[SSE] hertz client Do failed, err: %v", err)
 	}
 	if Callback := c.responseCallback; Callback != nil {
 		err = Callback(ctx, req, resp)
@@ -145,7 +145,7 @@ func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Eve
 			return err
 		}
 	} else if resp.StatusCode() != consts.StatusOK {
-		return fmt.Errorf("could not connect to stream code: %d", resp.StatusCode())
+		return fmt.Errorf("[SSE] resp status code expects 200 but got %d", resp.StatusCode())
 	}
 
 	reader := NewEventStreamReader(resp.BodyStream(), c.maxBufferSize)

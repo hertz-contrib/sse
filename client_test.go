@@ -22,11 +22,13 @@ import (
 	"encoding/hex"
 	"errors"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app/client"
+	"github.com/cloudwego/hertz/pkg/common/config"
 	"github.com/cloudwego/hertz/pkg/protocol"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 
@@ -637,4 +639,53 @@ func TestRequestWithBody(t *testing.T) {
 			assert.Nil(t, cErr)
 		})
 	}
+}
+
+func TestNewClientWithOptions(t *testing.T) {
+	// do not inject hertz client
+	cli, err := NewClientWithOptions()
+	assert.Nil(t, err)
+	optsGetter, ok := cli.hertzClient.(interface{ GetOptions() *config.ClientOptions })
+	assert.True(t, ok)
+	opts := optsGetter.GetOptions()
+	assert.NotNil(t, opts)
+	assert.True(t, opts.ResponseBodyStream)
+
+	// inject hertz client
+	hCli, err := client.NewClient()
+	assert.Nil(t, err)
+	cli, err = NewClientWithOptions(WithHertzClient(hCli))
+	assert.Nil(t, err)
+	assert.DeepEqual(t, hCli, cli.hertzClient)
+	optsGetter, ok = cli.hertzClient.(interface{ GetOptions() *config.ClientOptions })
+	assert.True(t, ok)
+	opts = optsGetter.GetOptions()
+	assert.NotNil(t, opts)
+	// NewClientWithOptions would configure ResponseBodyStream dynamically
+	assert.True(t, opts.ResponseBodyStream)
+}
+
+type mockHertzClient struct {
+	t            *testing.T
+	expectMethod string
+}
+
+func (m *mockHertzClient) Do(ctx context.Context, req *protocol.Request, resp *protocol.Response) error {
+	assert.DeepEqual(m.t, m.expectMethod, string(req.Method()))
+	resp.Header = protocol.ResponseHeader{}
+	resp.SetStatusCode(http.StatusOK)
+	// inject empty reader so that the BodyStream could return io.EOF directly
+	resp.SetBodyStream(strings.NewReader(""), 0)
+	return nil
+}
+
+func TestWithRequest(t *testing.T) {
+	cli, err := NewClientWithOptions(WithHertzClient(&mockHertzClient{t: t, expectMethod: consts.MethodGet}))
+	assert.Nil(t, err)
+	cli.SetMethod(consts.MethodPost)
+	// req configured by WithRequest has higher priority
+	req := &protocol.Request{}
+	req.SetMethod(consts.MethodGet)
+	err = cli.SubscribeWithContext(context.Background(), nil, WithRequest(req))
+	assert.Nil(t, err)
 }
