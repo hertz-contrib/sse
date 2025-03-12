@@ -208,8 +208,8 @@ func main() {
 }
 
 func checkEventEnd(e *sse.Event) bool {
-	// 可以检查 e.Data 或者 e.Event
-	return false
+	// 可以检查 e.Data 或者 e.Event, 取决于服务端的定义
+	return e.Event == "end" || string(e.Data) == "end flag"
 }
 ```
 

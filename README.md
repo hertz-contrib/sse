@@ -210,8 +210,8 @@ func main() {
 }
 
 func checkEventEnd(e *sse.Event) bool {
-  // check e.Data or e.Event
-  return false
+  // check e.Data or e.Event. It depends on the definition of the server
+  return e.Event == "end" || string(e.Data) == "end flag"
 }
 ```
 
