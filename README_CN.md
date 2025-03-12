@@ -21,50 +21,68 @@ go get github.com/hertz-contrib/sse
 
 ### 服务端
 
+查看: [examples/server/quickstart/main.go](examples/server/quickstart/main.go)
+
 ```go
 package main
 
 import (
-  "context"
-  "net/http"
-  "time"
+	"context"
+	"net/http"
+	"time"
 
-  "github.com/hertz-contrib/sse"
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/cloudwego/hertz/pkg/common/hlog"
 
-  "github.com/cloudwego/hertz/pkg/app"
-  "github.com/cloudwego/hertz/pkg/app/server"
-  "github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/hertz-contrib/sse"
 )
 
 func main() {
-  h := server.Default()
+	h := server.Default()
 
-  h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
-    // 客户端可以通过 Last-Event-ID 标头告诉服务端它收到的最后一个事件
-    lastEventID := sse.GetLastEventID(c)
-    hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
+	h.GET("/sse", func(ctx context.Context, c *app.RequestContext) {
+		// 客户端可以通过 Last-Event-ID 标头告诉服务端它收到的最后一个事件
+		lastEventID := sse.GetLastEventID(c)
+		hlog.CtxInfof(ctx, "last event ID: %s", lastEventID)
 
-    // 必须在第一次调用之前设置状态代码和响应标头
-    c.SetStatusCode(http.StatusOK)
-    s := sse.NewStream(c)
-    for t := range time.NewTicker(1 * time.Second).C {
-      event := &sse.Event{
-        Event: "timestamp",
-        Data:  []byte(t.Format(time.RFC3339)),
-      }
-      err := s.Publish(event)
-      if err != nil {
-        return
-      }
-    }
-  })
+		// 必须在第一次调用之前设置状态代码和响应标头
+		c.SetStatusCode(http.StatusOK)
+		s := sse.NewStream(c)
 
-  h.Spin()
+		count := 0
+		sendCountLimit := 10
+		for t := range time.NewTicker(1 * time.Second).C {
+			event := &sse.Event{
+				Event: "timestamp",
+				Data:  []byte(t.Format(time.RFC3339)),
+			}
+			err := s.Publish(event)
+			if err != nil {
+				return
+			}
+			count++
+			if count >= sendCountLimit {
+				// 发送结束标识到客户端
+				err := s.Publish(&sse.Event{
+					Event: "end",
+					Data:  []byte("end flag"),
+				})
+				if err != nil {
+					return
+				}
+				break
+			}
+		}
+	})
+
+	h.Spin()
 }
-
 ```
 
 ### 客户端
+
+查看: [examples/client/quickstart/main.go](examples/client/quickstart/main.go)
 
 ```go
 package main
@@ -72,93 +90,127 @@ package main
 import (
 	"context"
 	"sync"
-
-	"github.com/hertz-contrib/sse"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
+
+	"github.com/hertz-contrib/sse"
 )
 
 var wg sync.WaitGroup
 
 func main() {
-  wg.Add(2)	
-  go func() {
-    // 传入 server 端 URL 初始化客户端  	  
-    c := sse.NewClient("http://127.0.0.1:8888/sse")
+	wg.Add(2)
+	go func() {
+		c := sse.NewClient("http://127.0.0.1:8888/sse")
 
-    // 连接到服务端的时候触发
-    c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client1 connect to server %s success with %s method", c.GetURL(), c.GetMethod())
-    })
+		// 连接到服务端的时候触发
+		c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client1 connect to server %s success with %s method", c.GetURL(), c.GetMethod())
+		})
 
-    // 服务端断开连接的时候触发
-    c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client1 disconnect to server %s success with %s method", c.GetURL(), c.GetMethod())
-    })
+		// 服务端断开连接的时候触发
+		c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client1 disconnect to server %s success with %s method", c.GetURL(), c.GetMethod())
+		})
 
-    events := make(chan *sse.Event)
-    errChan := make(chan error)
-    go func() {
-      cErr := c.Subscribe(func(msg *sse.Event) {
-        if msg.Data != nil {
-          events <- msg
-          return
-        }
-      })
-      errChan <- cErr
-    }()
-    for {
-      select {
-      case e := <-events:
-        hlog.Info(e)
-      case err := <-errChan:
-        hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
-		wg.Done()
-        return
-      }
-    }
-  }()
+		events := make(chan *sse.Event)
+		errChan := make(chan error)
+		ctx, cancel := context.WithCancel(context.Background())
+		go func() {
+			cErr := c.SubscribeWithContext(ctx, func(msg *sse.Event) {
+				if msg.Data != nil {
+					events <- msg
+					return
+				}
+			})
+			errChan <- cErr
+		}()
+		go func() {
+			time.Sleep(5 * time.Second)
+			cancel()
+			hlog.Info("client1 subscribe cancel")
+		}()
+		for {
+			select {
+			case e := <-events:
+				hlog.Infof("client1, %+v", e)
+			case err := <-errChan:
+				if err == nil {
+					hlog.Info("client1, ctx done, read stop")
+				} else {
+					hlog.CtxErrorf(ctx, "client1, err = %s", err.Error())
+				}
+				wg.Done()
+				return
+			}
+		}
+	}()
 
-  go func() {
-    // 传入 server 端 URL 初始化客户端  
-    c := sse.NewClient("http://127.0.0.1:8888/sse")
+	go func() {
+		c := sse.NewClient("http://127.0.0.1:8888/sse")
 
-    // 连接到服务端的时候触发
-    c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client2 %s connect to server success with %s method",c.GetURL(), c.GetMethod())
-    })
+		// 连接到服务端的时候触发
+		c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client2 %s connect to server success with %s method", c.GetURL(), c.GetMethod())
+		})
 
-    // 服务端断开连接的时候触发
-    c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
-      hlog.Infof("client2 %s disconnect to server success with %s method", c.GetURL(), c.GetMethod())
-    })
+		// 服务端断开连接的时候触发
+		c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
+			hlog.Infof("client2 %s disconnect to server success with %s method", c.GetURL(), c.GetMethod())
+		})
 
-    events := make(chan *sse.Event)
-    errChan := make(chan error)
-    go func() {
-      cErr := c.Subscribe(func(msg *sse.Event) {
-        if msg.Data != nil {
-          events <- msg
-          return
-        }
-      })
-      errChan <- cErr
-    }()
-    for {
-      select {
-      case e := <-events:
-        hlog.Info(e)
-      case err := <-errChan:
-        hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
-		wg.Done()
-        return
-      }
-    }
-  }()
+		events := make(chan *sse.Event, 10)
+		errChan := make(chan error)
+		go func() {
+			cErr := c.Subscribe(func(msg *sse.Event) {
+				if msg.Data != nil {
+					events <- msg
+					return
+				}
+			})
+			errChan <- cErr
+		}()
 
-  wg.Wait()
+		streamClosed := false
+		for {
+			select {
+			case e := <-events:
+				hlog.Infof("client2, %+v", e)
+				time.Sleep(2 * time.Second) // 业务逻辑，阻塞
+				// 如果这个event是结束包，应该直接跳出循环
+				if checkEventEnd(e) {
+					wg.Done()
+					return
+				}
+			case err := <-errChan:
+				if err == nil {
+					// err 是 nil 表示读到了 io.EOF，流已经结束了
+					streamClosed = true
+					hlog.Info("client2, stream closed")
+					// 继续读取 events 通道
+					continue
+				}
+				hlog.CtxErrorf(context.Background(), "client2, err = %s", err.Error())
+				wg.Done()
+				return
+			default:
+				if streamClosed {
+					hlog.Info("client2, events is empty and stream closed")
+					wg.Done()
+					return
+				}
+			}
+		}
+	}()
+
+	wg.Wait()
 }
 
+func checkEventEnd(e *sse.Event) bool {
+	// 可以检查 e.Data 或者 e.Event, 取决于服务端的定义
+	return e.Event == "end" || string(e.Data) == "end flag"
+}
 ```
 
 ## 真实场景示例

@@ -38,11 +38,12 @@ package main
 
 import (
 	"context"
-	"fmt"
-	"github.com/cloudwego/hertz/pkg/common/hlog"
-	"github.com/hertz-contrib/sse"
 	"sync"
 	"time"
+
+	"github.com/cloudwego/hertz/pkg/common/hlog"
+
+	"github.com/hertz-contrib/sse"
 )
 
 var wg sync.WaitGroup
@@ -77,14 +78,18 @@ func main() {
 		go func() {
 			time.Sleep(5 * time.Second)
 			cancel()
-			fmt.Println("client1 subscribe cancel")
+			hlog.Info("client1 subscribe cancel")
 		}()
 		for {
 			select {
 			case e := <-events:
-				hlog.Info(e)
+				hlog.Infof("client1, %+v", e)
 			case err := <-errChan:
-				hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+				if err == nil {
+					hlog.Info("client1, ctx done, read stop")
+				} else {
+					hlog.CtxErrorf(ctx, "client1, err = %s", err.Error())
+				}
 				wg.Done()
 				return
 			}
@@ -104,7 +109,7 @@ func main() {
 			hlog.Infof("client2 %s disconnect to server success with %s method", c.GetURL(), c.GetMethod())
 		})
 
-		events := make(chan *sse.Event)
+		events := make(chan *sse.Event, 10)
 		errChan := make(chan error)
 		go func() {
 			cErr := c.Subscribe(func(msg *sse.Event) {
@@ -115,17 +120,43 @@ func main() {
 			})
 			errChan <- cErr
 		}()
+
+		streamClosed := false
 		for {
 			select {
 			case e := <-events:
-				hlog.Info(e)
+				hlog.Infof("client2, %+v", e)
+				time.Sleep(2 * time.Second) // do something blocked
+				// When the event ends, you should break out of the loop.
+				if checkEventEnd(e) {
+					wg.Done()
+					return
+				}
 			case err := <-errChan:
-				hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+				if err == nil {
+					// err is nil means read io.EOF, stream is closed
+					streamClosed = true
+					hlog.Info("client2, stream closed")
+					// continue read channel events
+					continue
+				}
+				hlog.CtxErrorf(context.Background(), "client2, err = %s", err.Error())
 				wg.Done()
 				return
+			default:
+				if streamClosed {
+					hlog.Info("client2, events is empty and stream closed")
+					wg.Done()
+					return
+				}
 			}
 		}
 	}()
 
 	wg.Wait()
+}
+
+func checkEventEnd(e *sse.Event) bool {
+	// check e.Data or e.Event. It depends on the definition of the server
+	return e.Event == "end" || string(e.Data) == "end flag"
 }

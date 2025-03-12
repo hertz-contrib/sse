@@ -41,11 +41,11 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/hertz-contrib/sse"
-
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
+
+	"github.com/hertz-contrib/sse"
 )
 
 func main() {
@@ -59,6 +59,9 @@ func main() {
 		// you must set status code and response headers before first render call
 		c.SetStatusCode(http.StatusOK)
 		s := sse.NewStream(c)
+
+		count := 0
+		sendCountLimit := 10
 		for t := range time.NewTicker(1 * time.Second).C {
 			event := &sse.Event{
 				Event: "timestamp",
@@ -67,6 +70,18 @@ func main() {
 			err := s.Publish(event)
 			if err != nil {
 				return
+			}
+			count++
+			if count >= sendCountLimit {
+				// send end flag to client
+				err := s.Publish(&sse.Event{
+					Event: "end",
+					Data:  []byte("end flag"),
+				})
+				if err != nil {
+					return
+				}
+				break
 			}
 		}
 	})

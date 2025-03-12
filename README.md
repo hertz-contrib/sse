@@ -23,6 +23,8 @@ go get github.com/hertz-contrib/sse
 
 ### Server
 
+see: [examples/server/quickstart/main.go](examples/server/quickstart/main.go)
+
 ```go
 package main
 
@@ -31,11 +33,11 @@ import (
   "net/http"
   "time"
 
-  "github.com/hertz-contrib/sse"
-
   "github.com/cloudwego/hertz/pkg/app"
   "github.com/cloudwego/hertz/pkg/app/server"
   "github.com/cloudwego/hertz/pkg/common/hlog"
+
+  "github.com/hertz-contrib/sse"
 )
 
 func main() {
@@ -49,6 +51,9 @@ func main() {
     // you must set status code and response headers before first render call
     c.SetStatusCode(http.StatusOK)
     s := sse.NewStream(c)
+
+    count := 0
+    sendCountLimit := 10
     for t := range time.NewTicker(1 * time.Second).C {
       event := &sse.Event{
         Event: "timestamp",
@@ -58,15 +63,28 @@ func main() {
       if err != nil {
         return
       }
+      count++
+      if count >= sendCountLimit {
+        // send end flag to client
+        err := s.Publish(&sse.Event{
+          Event: "end",
+          Data:  []byte("end flag"),
+        })
+        if err != nil {
+          return
+        }
+        break
+      }
     }
   })
 
   h.Spin()
 }
-
 ```
 
 ### Client
+
+see: [examples/client/quickstart/main.go](examples/client/quickstart/main.go)
 
 ```go
 package main
@@ -74,10 +92,11 @@ package main
 import (
   "context"
   "sync"
-
-  "github.com/hertz-contrib/sse"
+  "time"
 
   "github.com/cloudwego/hertz/pkg/common/hlog"
+
+  "github.com/hertz-contrib/sse"
 )
 
 var wg sync.WaitGroup
@@ -85,7 +104,6 @@ var wg sync.WaitGroup
 func main() {
   wg.Add(2)
   go func() {
-    // pass in the server-side URL to initialize the client	  
     c := sse.NewClient("http://127.0.0.1:8888/sse")
 
     // touch off when connected to the server
@@ -100,8 +118,9 @@ func main() {
 
     events := make(chan *sse.Event)
     errChan := make(chan error)
+    ctx, cancel := context.WithCancel(context.Background())
     go func() {
-      cErr := c.Subscribe(func(msg *sse.Event) {
+      cErr := c.SubscribeWithContext(ctx, func(msg *sse.Event) {
         if msg.Data != nil {
           events <- msg
           return
@@ -109,12 +128,21 @@ func main() {
       })
       errChan <- cErr
     }()
+    go func() {
+      time.Sleep(5 * time.Second)
+      cancel()
+      hlog.Info("client1 subscribe cancel")
+    }()
     for {
       select {
       case e := <-events:
-        hlog.Info(e)
+        hlog.Infof("client1, %+v", e)
       case err := <-errChan:
-        hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+        if err == nil {
+          hlog.Info("client1, ctx done, read stop")
+        } else {
+          hlog.CtxErrorf(ctx, "client1, err = %s", err.Error())
+        }
         wg.Done()
         return
       }
@@ -122,7 +150,6 @@ func main() {
   }()
 
   go func() {
-    // pass in the server-side URL to initialize the client	  
     c := sse.NewClient("http://127.0.0.1:8888/sse")
 
     // touch off when connected to the server
@@ -135,10 +162,10 @@ func main() {
       hlog.Infof("client2 %s disconnect to server success with %s method", c.GetURL(), c.GetMethod())
     })
 
-    events := make(chan *sse.Event)
+    events := make(chan *sse.Event, 10)
     errChan := make(chan error)
     go func() {
-      cErr := c.Subscribe( func(msg *sse.Event) {
+      cErr := c.Subscribe(func(msg *sse.Event) {
         if msg.Data != nil {
           events <- msg
           return
@@ -146,14 +173,35 @@ func main() {
       })
       errChan <- cErr
     }()
+
+    streamClosed := false
     for {
       select {
       case e := <-events:
-        hlog.Info(e)
+        hlog.Infof("client2, %+v", e)
+        time.Sleep(2 * time.Second) // do something blocked
+        // When the event ends, you should break out of the loop.
+        if checkEventEnd(e) {
+          wg.Done()
+          return
+        }
       case err := <-errChan:
-        hlog.CtxErrorf(context.Background(), "err = %s", err.Error())
+        if err == nil {
+          // err is nil means read io.EOF, stream is closed
+          streamClosed = true
+          hlog.Info("client2, stream closed")
+          // continue read channel events
+          continue
+        }
+        hlog.CtxErrorf(context.Background(), "client2, err = %s", err.Error())
         wg.Done()
         return
+      default:
+        if streamClosed {
+          hlog.Info("client2, events is empty and stream closed")
+          wg.Done()
+          return
+        }
       }
     }
   }()
@@ -161,6 +209,10 @@ func main() {
   wg.Wait()
 }
 
+func checkEventEnd(e *sse.Event) bool {
+  // check e.Data or e.Event. It depends on the definition of the server
+  return e.Event == "end" || string(e.Data) == "end flag"
+}
 ```
 
 ## Real-world examples
