@@ -65,7 +65,7 @@ type Client struct {
 var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()), client.WithResponseBodyStream(true))
 
 // NewClient creates a new client
-// deprecated, pls use NewClientWithOptions
+// Deprecated, pls use NewClientWithOptions
 func NewClient(url string) *Client {
 	c := &Client{
 		url:           url,
