@@ -41,7 +41,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/cloudwego/hertz/pkg/network/standard"
+	"github.com/cloudwego/hertz/pkg/protocol"
 
 	"github.com/hertz-contrib/sse"
 )
@@ -51,28 +54,39 @@ var wg sync.WaitGroup
 func main() {
 	wg.Add(2)
 	go func() {
-		c := sse.NewClient("http://127.0.0.1:8888/sse")
+		hertzCli, err := client.NewClient(client.WithDialer(standard.NewDialer()))
+		if err != nil {
+			hlog.Errorf("create Hertz Client failed, err: %v", err)
+			return
+		}
+		c, err := sse.NewClientWithOptions(sse.WithHertzClient(hertzCli))
+		if err != nil {
+			hlog.Errorf("create SSE Client failed, err: %v", err)
+			return
+		}
 
 		// touch off when connected to the server
 		c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client1 connect to server %s success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client1 connect to server success")
 		})
 
 		// touch off when the connection is shutdown
 		c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client1 disconnect to server %s success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client1 disconnect to server success")
 		})
 
 		events := make(chan *sse.Event)
 		errChan := make(chan error)
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
+			req := &protocol.Request{}
+			req.SetRequestURI("http://127.0.0.1:8888/sse")
 			cErr := c.SubscribeWithContext(ctx, func(msg *sse.Event) {
 				if msg.Data != nil {
 					events <- msg
 					return
 				}
-			})
+			}, sse.WithRequest(req))
 			errChan <- cErr
 		}()
 		go func() {
@@ -95,29 +109,39 @@ func main() {
 			}
 		}
 	}()
-
 	go func() {
-		c := sse.NewClient("http://127.0.0.1:8888/sse")
+		hertzCli, err := client.NewClient(client.WithDialer(standard.NewDialer()))
+		if err != nil {
+			hlog.Errorf("create Hertz Client failed, err: %v", err)
+			return
+		}
+		c, err := sse.NewClientWithOptions(sse.WithHertzClient(hertzCli))
+		if err != nil {
+			hlog.Errorf("create SSE Client failed, err: %v", err)
+			return
+		}
 
 		// touch off when connected to the server
 		c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client2 %s connect to server success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client2 connect to server success")
 		})
 
 		// touch off when the connection is shutdown
 		c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client2 %s disconnect to server success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client2 disconnect to server success")
 		})
 
 		events := make(chan *sse.Event, 10)
 		errChan := make(chan error)
 		go func() {
+			req := &protocol.Request{}
+			req.SetRequestURI("http://127.0.0.1:8888/sse")
 			cErr := c.Subscribe(func(msg *sse.Event) {
 				if msg.Data != nil {
 					events <- msg
 					return
 				}
-			})
+			}, sse.WithRequest(req))
 			errChan <- cErr
 		}()
 

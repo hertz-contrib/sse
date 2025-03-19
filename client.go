@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/cloudwego/hertz/pkg/common/config"
 	"github.com/cloudwego/hertz/pkg/network/standard"
 
 	"github.com/cloudwego/hertz/pkg/app/client"
@@ -56,7 +57,6 @@ type Client struct {
 	url                string
 	method             string
 	maxBufferSize      int
-	connected          bool
 	encodingBase64     bool
 	lastEventID        atomic.Value // []byte
 	body               []byte
@@ -65,6 +65,7 @@ type Client struct {
 var defaultClient, _ = client.NewClient(client.WithDialer(standard.NewDialer()), client.WithResponseBodyStream(true))
 
 // NewClient creates a new client
+// Deprecated, pls use NewClientWithOptions
 func NewClient(url string) *Client {
 	c := &Client{
 		url:           url,
@@ -77,29 +78,74 @@ func NewClient(url string) *Client {
 	return c
 }
 
+// NewClientWithOptions creates a new Client with specified ClientOption
+func NewClientWithOptions(opts ...ClientOption) (*Client, error) {
+	options := ClientOptions{}
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	var cliIntf do.Doer
+	if options.hertzCli != nil {
+		cliIntf = options.hertzCli
+	} else {
+		cliIntf = defaultClient
+	}
+	// SSE must use the streaming read functionality
+	if optionsGetter, ok := cliIntf.(interface{ GetOptions() *config.ClientOptions }); ok {
+		optionsGetter.GetOptions().ResponseBodyStream = true
+	}
+
+	c := &Client{
+		hertzClient:   cliIntf,
+		headers:       make(map[string]string),
+		maxBufferSize: 1 << 16,
+	}
+
+	return c, nil
+}
+
 // Subscribe to a data stream
-func (c *Client) Subscribe(handler func(msg *Event)) error {
-	return c.SubscribeWithContext(context.Background(), handler)
+func (c *Client) Subscribe(handler func(msg *Event), opts ...SubscribeOption) error {
+	return c.SubscribeWithContext(context.Background(), handler, opts...)
 }
 
 // SubscribeWithContext to a data stream with context
-func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Event)) error {
-	req, resp := protocol.AcquireRequest(), protocol.AcquireResponse()
-	err := c.request(ctx, req, resp)
-	if err != nil {
-		return err
+func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Event), opts ...SubscribeOption) (err error) {
+	options := SubscribeOptions{}
+	for _, opt := range opts {
+		opt(&options)
 	}
+
+	var req *protocol.Request
+	var needReleaseReq bool
+	if options.req != nil {
+		// req set by WithRequest has higher priority
+		req = options.req
+	} else {
+		req = protocol.AcquireRequest()
+		c.initRequestForCompatibility(req)
+		needReleaseReq = true
+	}
+	initSSERequest(req)
+	resp := protocol.AcquireResponse()
 	defer func() {
-		protocol.ReleaseRequest(req)
+		if needReleaseReq {
+			protocol.ReleaseRequest(req)
+		}
 		protocol.ReleaseResponse(resp)
 	}()
+
+	if err = c.hertzClient.Do(ctx, req, resp); err != nil {
+		return fmt.Errorf("[SSE] hertz client Do failed, err: %v", err)
+	}
 	if Callback := c.responseCallback; Callback != nil {
 		err = Callback(ctx, req, resp)
 		if err != nil {
 			return err
 		}
 	} else if resp.StatusCode() != consts.StatusOK {
-		return fmt.Errorf("could not connect to stream code: %d", resp.StatusCode())
+		return fmt.Errorf("[SSE] resp status code expects 200 but got %d", resp.StatusCode())
 	}
 
 	reader := NewEventStreamReader(resp.BodyStream(), c.maxBufferSize)
@@ -115,6 +161,32 @@ func (c *Client) SubscribeWithContext(ctx context.Context, handler func(msg *Eve
 	}
 }
 
+// initRequestForCompatibility inits req by the client's settings if users do not use WithRequest
+func (c *Client) initRequestForCompatibility(req *protocol.Request) {
+	req.SetMethod(c.method)
+	req.SetRequestURI(c.url)
+	// Add user specified headers
+	for k, v := range c.headers {
+		req.Header.Set(k, v)
+	}
+
+	if len(c.body) != 0 {
+		req.SetBody(c.body)
+	}
+}
+
+// initSSERequest sets the attributes necessary for SSE
+func initSSERequest(req *protocol.Request) {
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Connection", "keep-alive")
+	// if method is not set by WithRequest or client.SetMethod
+	// using GET by default
+	if len(req.Method()) <= 0 {
+		req.SetMethod(consts.MethodGet)
+	}
+}
+
 func (c *Client) startReadLoop(ctx context.Context, reader *EventStreamReader) (chan *Event, chan error) {
 	outCh := make(chan *Event)
 	erChan := make(chan error)
@@ -123,6 +195,7 @@ func (c *Client) startReadLoop(ctx context.Context, reader *EventStreamReader) (
 }
 
 func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh chan *Event, erChan chan error) {
+	var connected bool
 	for {
 		// Read each new line and process the type of event
 		event, err := reader.ReadEvent(ctx)
@@ -133,15 +206,14 @@ func (c *Client) readLoop(ctx context.Context, reader *EventStreamReader, outCh 
 			}
 			// run user specified disconnect function
 			if c.disconnectCallback != nil {
-				c.connected = false
 				c.disconnectCallback(ctx, c)
 			}
 			erChan <- err
 			return
 		}
 
-		if !c.connected && c.connectedCallback != nil {
-			c.connected = true
+		if !connected && c.connectedCallback != nil {
+			connected = true
 			c.connectedCallback(ctx, c)
 		}
 
@@ -178,21 +250,25 @@ func (c *Client) SetMaxBufferSize(size int) {
 }
 
 // SetURL set sse client url
+// Deprecated, set in protocol.Request and use WithRequest instead
 func (c *Client) SetURL(url string) {
 	c.url = url
 }
 
 // SetBody set sse client request body
+// Deprecated, set in protocol.Request and use WithRequest instead
 func (c *Client) SetBody(body []byte) {
 	c.body = body
 }
 
 // SetMethod set sse client request method
+// Deprecated, set in protocol.Request and use WithRequest instead
 func (c *Client) SetMethod(method string) {
 	c.method = method
 }
 
 // SetHeaders set sse client headers
+// Deprecated, set in protocol.Request and use WithRequest instead
 func (c *Client) SetHeaders(headers map[string]string) {
 	c.headers = headers
 }
@@ -203,6 +279,7 @@ func (c *Client) SetResponseCallback(responseCallback ResponseCallback) {
 }
 
 // SetHertzClient set sse client
+// Deprecated, set in NewClientWithOptions(WithHertzClient(hCli))
 func (c *Client) SetHertzClient(hertzClient do.Doer) {
 	c.hertzClient = hertzClient
 }
@@ -213,58 +290,41 @@ func (c *Client) SetEncodingBase64(encodingBase64 bool) {
 }
 
 // GetURL get sse client url
+// Deprecated
 func (c *Client) GetURL() string {
 	return c.url
 }
 
 // GetHeaders get sse client headers
+// Deprecated
 func (c *Client) GetHeaders() map[string]string {
 	return c.headers
 }
 
 // GetMethod get sse client method
+// Deprecated
 func (c *Client) GetMethod() string {
 	return c.method
 }
 
 // GetHertzClient get sse client
+// Deprecated
 func (c *Client) GetHertzClient() do.Doer {
 	return c.hertzClient
 }
 
 // GetBody get sse client request body
+// Deprecated
 func (c *Client) GetBody() []byte {
 	return c.body
 }
 
 // GetLastEventID get sse client lastEventID
+// Deprecated
+// If you use a Client to initiate multiple SSE requests,
+// the results returned by GetLastEventID do not identify which SSE request belongs to
 func (c *Client) GetLastEventID() []byte {
 	return c.lastEventID.Load().([]byte)
-}
-
-func (c *Client) request(ctx context.Context, req *protocol.Request, resp *protocol.Response) error {
-	req.SetMethod(c.method)
-	req.SetRequestURI(c.url)
-
-	req.Header.Set("Cache-Control", "no-cache")
-	req.Header.Set("Accept", "text/event-stream")
-	req.Header.Set("Connection", "keep-alive")
-
-	lastID, exists := c.lastEventID.Load().([]byte)
-	if exists && lastID != nil {
-		req.Header.Set(LastEventID, string(lastID))
-	}
-	// Add user specified headers
-	for k, v := range c.headers {
-		req.Header.Set(k, v)
-	}
-
-	if len(c.body) != 0 {
-		req.SetBody(c.body)
-	}
-
-	err := c.hertzClient.Do(ctx, req, resp)
-	return err
 }
 
 func (c *Client) processEvent(msg []byte) (event *Event, err error) {

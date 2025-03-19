@@ -92,7 +92,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cloudwego/hertz/pkg/app/client"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/cloudwego/hertz/pkg/protocol"
 
 	"github.com/hertz-contrib/sse"
 )
@@ -102,28 +104,42 @@ var wg sync.WaitGroup
 func main() {
 	wg.Add(2)
 	go func() {
-		c := sse.NewClient("http://127.0.0.1:8888/sse")
+		// 创建 Hertz client
+		hCli, err := client.NewClient()
+		if err != nil {
+			hlog.Errorf("create Hertz client failed, err: %v", err)
+			return
+		}
+		// 传入 Hertz client 构建 SSE client
+		c, err := sse.NewClientWithOptions(sse.WithHertzClient(hCli))
+		if err != nil {
+			hlog.Errorf("create SSE client failed, err: %v", err)
+			return
+		}
 
 		// 连接到服务端的时候触发
 		c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client1 connect to server %s success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client1 connect to server success")
 		})
 
 		// 服务端断开连接的时候触发
 		c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client1 disconnect to server %s success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client1 disconnect to server success")
 		})
 
 		events := make(chan *sse.Event)
 		errChan := make(chan error)
 		ctx, cancel := context.WithCancel(context.Background())
 		go func() {
+			// 构建每次 SSE 请求发送的 req
+			req := &protocol.Request{}
+			req.SetRequestURI("http://127.0.0.1:8888/sse")
 			cErr := c.SubscribeWithContext(ctx, func(msg *sse.Event) {
 				if msg.Data != nil {
 					events <- msg
 					return
 				}
-			})
+			}, sse.WithRequest(req))
 			errChan <- cErr
 		}()
 		go func() {
@@ -148,27 +164,41 @@ func main() {
 	}()
 
 	go func() {
-		c := sse.NewClient("http://127.0.0.1:8888/sse")
+		// 创建 Hertz client
+		hCli, err := client.NewClient()
+		if err != nil {
+			hlog.Errorf("create Hertz client failed, err: %v", err)
+			return
+		}
+		// 传入 Hertz client 构建 SSE client	  
+		c, err := sse.NewClientWithOptions(sse.WithHertzClient(hCli))
+		if err != nil {
+			hlog.Errorf("create SSE client failed, err: %v", err)
+			return
+		}
 
 		// 连接到服务端的时候触发
 		c.SetOnConnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client2 %s connect to server success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client2 connect to server success")
 		})
 
 		// 服务端断开连接的时候触发
 		c.SetDisconnectCallback(func(ctx context.Context, client *sse.Client) {
-			hlog.Infof("client2 %s disconnect to server success with %s method", c.GetURL(), c.GetMethod())
+			hlog.Infof("client2 disconnect to server success")
 		})
 
 		events := make(chan *sse.Event, 10)
 		errChan := make(chan error)
 		go func() {
+			// 构建每次 SSE 请求发送的 req
+			req := &protocol.Request{}
+			req.SetRequestURI("http://127.0.0.1:8888/sse")
 			cErr := c.Subscribe(func(msg *sse.Event) {
 				if msg.Data != nil {
 					events <- msg
 					return
 				}
-			})
+			}, sse.WithRequest(req))
 			errChan <- cErr
 		}()
 
@@ -211,6 +241,7 @@ func checkEventEnd(e *sse.Event) bool {
 	// 可以检查 e.Data 或者 e.Event, 取决于服务端的定义
 	return e.Event == "end" || string(e.Data) == "end flag"
 }
+
 ```
 
 ## 真实场景示例
