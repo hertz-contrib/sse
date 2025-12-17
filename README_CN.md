@@ -1,5 +1,7 @@
 # Hertz-SSE
 
+**注意**: 本项目已归档。请使用 Hertz 内置的 SSE 实现获得更好的体验，详情参考使用文档 [SSE](https://www.cloudwego.io/zh/docs/hertz/tutorials/basic-feature/sse/)。
+
 （这是一个社区驱动的项目）
 
 [English](README.md) ｜ 中文

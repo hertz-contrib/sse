@@ -1,5 +1,7 @@
 # Hertz-SSE
 
+**Notice**: This project is now archived. For users and those seeking similar functionality, please use Hertz's built-in SSE implementation for a better user experience. Check documentation [SSE](https://www.cloudwego.io/docs/hertz/tutorials/basic-feature/sse/).
+
 (This is a community driven project)
 
 English ｜ [中文](README_CN.md)
